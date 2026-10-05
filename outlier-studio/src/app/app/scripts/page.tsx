@@ -7,7 +7,7 @@ import { REMIX_KEY } from '@/components/GenerationViews';
 import { PlatformSelect } from '@/components/PlatformSelect';
 import { ScriptStage } from '@/components/ScriptStage';
 import { CopyButton, ErrorNotice, Field, PageHead, ReferenceTranscript, useReveal } from '@/components/ui';
-import { compact, refreshCredits, type ApiError } from '@/lib/api';
+import { compact, type ApiError } from '@/lib/api';
 import { streamScript } from '@/lib/stream';
 import { FRAMEWORK_KEYS, FRAMEWORKS, type Framework } from '@/shared/catalog';
 
@@ -81,14 +81,13 @@ function ScriptWriter() {
         setPhase('idle');
       }
     } finally {
-      refreshCredits();
     }
   }
 
   const writing = phase === 'writing';
   const fields = error?.fields ?? {};
   const status =
-    phase === 'writing' ? 'Writing' : phase === 'done' ? 'Saved to your Library' : phase === 'stopped' ? 'Stopped. The draft was not saved and the credit was used.' : 'Script';
+    phase === 'writing' ? 'Writing' : phase === 'done' ? 'Saved to your Library' : phase === 'stopped' ? 'Stopped. The draft was not saved.' : 'Script';
 
   return (
     <>

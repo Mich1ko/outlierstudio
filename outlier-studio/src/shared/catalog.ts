@@ -49,5 +49,4 @@ export const FRAMEWORK_KEYS = Object.keys(FRAMEWORKS) as [Framework, ...Framewor
 /** Speaking pace used for script length targets and timing marks. */
 export const WORDS_PER_SECOND = 2.5;
 
-export const PLAN_LABELS = { starter: 'Starter', pro: 'Pro', visionary: 'Visionary', titan: 'Titan' } as const;
 export const FEATURE_LABELS: Record<string, string> = { hooks: 'Hooks', script: 'Scripts', analysis: 'Video analysis', report: 'Channel reports' };

@@ -18,10 +18,16 @@ const schema = z.object({
   GROQ_REASONING_EFFORT: z.enum(['low', 'medium', 'high']).optional(),
   /** Google API key with the YouTube Data API v3 enabled. Needed for competitor tracking. */
   YOUTUBE_API_KEY: z.string().optional(),
-  /** Supadata key: automatic transcripts, and numbers for TikTok and Instagram videos. */
-  SUPADATA_API_KEY: z.string().optional(),
-  /** Honoured only when NODE_ENV === 'test' (see video/supadata.ts). */
-  SUPADATA_BASE_URL: z.string().optional(),
+  /** Apify API token: YouTube transcripts, and numbers for TikTok and Instagram videos. */
+  APIFY_TOKEN: z.string().optional(),
+  /** Most this server may spend on Apify in a calendar month (UTC). Capped at $5 in code. */
+  APIFY_MONTHLY_BUDGET_USD: z.coerce.number().min(0).default(5),
+  /** Optional overrides of the Actors in video/apify.ts. */
+  APIFY_ACTOR_YOUTUBE_TRANSCRIPT: z.string().optional(),
+  APIFY_ACTOR_TIKTOK: z.string().optional(),
+  APIFY_ACTOR_INSTAGRAM: z.string().optional(),
+  /** Honoured only when NODE_ENV === 'test' (see video/apify.ts). */
+  APIFY_BASE_URL: z.string().optional(),
   /** How often each tracked channel is re-checked. */
   TRACK_INTERVAL_HOURS: z.coerce.number().min(1).max(168).default(6),
   /** Set to 1 to stop the built-in background checker (for hosts that call /api/cron/refresh instead). */

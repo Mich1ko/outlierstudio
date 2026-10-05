@@ -6,7 +6,7 @@ import { ErrorNotice, PageHead, Skeleton } from '@/components/ui';
 import { api, type ApiError } from '@/lib/api';
 import { num, usd, utcDay, when } from '@/lib/format';
 import type { Usage } from '@/lib/types';
-import { FEATURE_LABELS, PLAN_LABELS } from '@/shared/catalog';
+import { FEATURE_LABELS } from '@/shared/catalog';
 
 const dash = (n: number | null) => (n === null ? 'Not reported' : num(n));
 
@@ -20,30 +20,11 @@ export default function UsagePage() {
   if (error) return <ErrorNotice error={error} />;
   if (!usage) return <Skeleton lines={6} />;
 
-  const { credits, month } = usage;
-  const pct = credits.limit > 0 ? Math.min(100, (credits.used / credits.limit) * 100) : 100;
-  const costs = Object.entries(credits.costPerAction)
-    .map(([feature, cost]) => `${FEATURE_LABELS[feature] ?? feature}: ${cost === 0 ? 'free' : `${cost} credit${cost === 1 ? '' : 's'}`}`)
-    .join(', ');
+  const { month } = usage;
 
   return (
     <div className="stack-lg" style={{ maxWidth: 1000 }}>
-      <PageHead title="Usage">Since {utcDay(usage.periodStart)}. Credits reset on the first of each month (UTC).</PageHead>
-
-      <section className="panel big-meter">
-        <div className="row" style={{ justifyContent: 'space-between' }}>
-          <h2>
-            {credits.used} of {credits.limit} credits used
-          </h2>
-          <span className="tag">{PLAN_LABELS[usage.plan]} plan</span>
-        </div>
-        <div className="meter" data-low={credits.remaining === 0} role="img" aria-label={`${Math.round(pct)} percent of monthly credits used`}>
-          <span style={{ width: `${pct}%` }} />
-        </div>
-        <p className="muted small">
-          {costs}. Requests that fail are not charged; a script you stop part-way is. Up to {usage.requestsPerMinute} requests per minute.
-        </p>
-      </section>
+      <PageHead title="Usage">Groq requests and estimated cost since {utcDay(usage.periodStart)}. No limits apart from {usage.requestsPerMinute} requests per minute.</PageHead>
 
       <section className="stack">
         <h2>This month</h2>
@@ -80,7 +61,6 @@ export default function UsagePage() {
                 <tr>
                   <th>Tool</th>
                   <th className="num">Requests</th>
-                  <th className="num">Credits</th>
                   <th className="num">Tokens in</th>
                   <th className="num">Tokens out</th>
                   <th className="num">Est. cost</th>
@@ -91,7 +71,6 @@ export default function UsagePage() {
                   <tr key={f.feature}>
                     <td>{FEATURE_LABELS[f.feature] ?? f.feature}</td>
                     <td className="num">{num(f.requests)}</td>
-                    <td className="num">{num(f.credits)}</td>
                     <td className="num">{num(f.inputTokens)}</td>
                     <td className="num">{num(f.outputTokens)}</td>
                     <td className="num">{usd(f.estimatedCostUsd)}</td>
@@ -118,7 +97,6 @@ export default function UsagePage() {
                   <th>Model</th>
                   <th className="num">Tokens</th>
                   <th className="num">Est. cost</th>
-                  <th className="num">Credits</th>
                   <th>Output</th>
                 </tr>
               </thead>
@@ -143,7 +121,6 @@ export default function UsagePage() {
                     <td>{r.model}</td>
                     <td className="num">{dash(r.totalTokens)}</td>
                     <td className="num">{r.estimatedCostUsd === null ? 'Not priced' : usd(r.estimatedCostUsd)}</td>
-                    <td className="num">{r.creditsCharged}</td>
                     <td>{r.generationId ? <Link href={`/app/library/${r.generationId}`}>Open</Link> : ''}</td>
                   </tr>
                 ))}

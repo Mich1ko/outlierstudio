@@ -30,9 +30,9 @@ const ANALYSIS_JSON = JSON.stringify({
 });
 const analysisBody = { transcript: TRANSCRIPT, title: 'Stretching myth', views: 900_000, channelMedianViews: 60_000 };
 
-async function setCredits(starter: number, extra: Partial<typeof DEFAULT_LIMITS> = {}) {
+async function setRate(requestsPerMinute: number) {
   const { user } = await newUser('limits-admin@example.com');
-  await setLimits(await getDb(), { ...DEFAULT_LIMITS, ...extra, planMonthlyCredits: { ...DEFAULT_LIMITS.planMonthlyCredits, starter } }, user.id);
+  await setLimits(await getDb(), { ...DEFAULT_LIMITS, requestsPerMinute }, user.id);
 }
 
 describe('AI endpoints require a session', () => {
@@ -98,15 +98,14 @@ describe('hooks (structured JSON)', () => {
     expect(row!.estimatedCostUsd).toBeNull();
   });
 
-  it('rejects malformed model output, records the tokens spent and refunds credits', async () => {
-    await setCredits(5, { creditCosts: { hooks: 1, script: 1, analysis: 1, report: 1 } });
+  it('rejects malformed model output and records the tokens spent', async () => {
     const { cookie, user } = await newUser();
     groq.enqueue({ kind: 'json', content: '{"hooks":[{"text":"x","pattern":"not_a_pattern"}]}' });
     const res = await call(hooks, 'POST', '/api/ai/hooks', { cookie, body: { topic: 'Warm ups for runners' } });
     expect(res.status).toBe(502);
     expect((await res.json()).error.code).toBe('ai_invalid_output');
     const [row] = await requestRows(user.id);
-    expect(row).toMatchObject({ status: 'failed', errorCode: 'ai_invalid_output', creditsCharged: 0, totalTokens: 200, generationId: null });
+    expect(row).toMatchObject({ status: 'failed', errorCode: 'ai_invalid_output', totalTokens: 200, generationId: null });
   });
 
   it('validates input before spending anything', async () => {
@@ -141,7 +140,7 @@ describe('Groq failures are reported, not hidden', () => {
       expect(JSON.stringify(body)).not.toMatch(/Invalid API Key|gsk_|at .*\.ts/);
       if (name === 'rate limit') expect(res.headers.get('retry-after')).toBe('7');
       const [row] = await requestRows(user.id);
-      expect(row).toMatchObject({ status: 'failed', errorCode: code, creditsCharged: 0, inputTokens: null });
+      expect(row).toMatchObject({ status: 'failed', errorCode: code, inputTokens: null });
       expect(groq.calls).toHaveLength(1);
     });
   }
@@ -198,7 +197,7 @@ describe('script streaming', () => {
 
     expect(groq.calls[0]!.body.stream).toBe(true);
     const [row] = await requestRows(user.id);
-    expect(row).toMatchObject({ feature: 'script', status: 'succeeded', totalTokens: 200, creditsCharged: 1, generationId: done.data.generation.id, groqRequestId: 'req_test_stream' });
+    expect(row).toMatchObject({ feature: 'script', status: 'succeeded', totalTokens: 200, generationId: done.data.generation.id, groqRequestId: 'req_test_stream' });
   });
 
   it('leaves token counts empty when Groq reports none, instead of estimating', async () => {
@@ -216,7 +215,7 @@ describe('script streaming', () => {
     const events = await readSse(await call(script, 'POST', '/api/ai/script', { cookie, body: { idea: 'Why stretching before running is a mistake' } }));
     expect(events.at(-1)).toEqual({ event: 'error', data: { code: 'ai_stream_interrupted', message: expect.any(String) } });
     const [row] = await requestRows(user.id);
-    expect(row).toMatchObject({ status: 'failed', errorCode: 'ai_stream_interrupted', creditsCharged: 0, generationId: null });
+    expect(row).toMatchObject({ status: 'failed', errorCode: 'ai_stream_interrupted', generationId: null });
   });
 
   it('returns a normal HTTP error when Groq fails before the first token', async () => {
@@ -242,52 +241,32 @@ describe('script streaming', () => {
       await new Promise((r) => setTimeout(r, 50));
       row = (await requestRows(user.id))[0]!;
     }
-    expect(row).toMatchObject({ status: 'failed', errorCode: 'client_aborted', creditsCharged: 1, totalTokens: null, generationId: null });
+    expect(row).toMatchObject({ status: 'failed', errorCode: 'client_aborted', totalTokens: null, generationId: null });
   });
 });
 
 describe('quotas and rate limits are enforced on the server', () => {
-  it('stops at the monthly credit limit without calling Groq, and does not charge for failures', async () => {
-    await setCredits(2);
-    const { cookie, user } = await newUser();
+  it('has no monthly cap and records usage, including failures', async () => {
+    const { cookie } = await newUser();
 
     groq.enqueue({ kind: 'error', status: 503, body: { error: { message: 'down' } } });
     expect((await call(analyze, 'POST', '/api/ai/analyze', { cookie, body: analysisBody })).status).toBe(503);
 
-    groq.enqueue({ kind: 'json', content: ANALYSIS_JSON }, { kind: 'json', content: ANALYSIS_JSON });
+    groq.enqueue({ kind: 'json', content: ANALYSIS_JSON }, { kind: 'json', content: ANALYSIS_JSON }, { kind: 'json', content: HOOKS_JSON });
     expect((await call(analyze, 'POST', '/api/ai/analyze', { cookie, body: analysisBody })).status).toBe(201);
     expect((await call(analyze, 'POST', '/api/ai/analyze', { cookie, body: analysisBody })).status).toBe(201);
-
-    const before = groq.calls.length;
-    const blocked = await call(analyze, 'POST', '/api/ai/analyze', { cookie, body: analysisBody });
-    expect(blocked.status).toBe(402);
-    expect((await blocked.json()).error).toMatchObject({ code: 'quota_exceeded', details: { used: 2, limit: 2 } });
-    expect(groq.calls.length).toBe(before);
-    expect(await requestRows(user.id)).toHaveLength(3);
-
-    // Hooks cost 0 credits by default and still work.
-    groq.enqueue({ kind: 'json', content: HOOKS_JSON });
     expect((await call(hooks, 'POST', '/api/ai/hooks', { cookie, body: { topic: 'Warm ups for runners' } })).status).toBe(201);
 
     const summary = await (await call(usage, 'GET', '/api/usage', { cookie })).json();
-    expect(summary.credits).toMatchObject({ used: 2, limit: 2, remaining: 0 });
+    expect(summary).not.toHaveProperty('credits');
     expect(summary.month).toMatchObject({ requests: 4, failed: 1, totalTokens: 600 });
     expect(summary.byFeature.find((f: any) => f.feature === 'analysis').requests).toBe(3);
     expect(summary.recent).toHaveLength(4);
     expect(summary.costNote).toMatch(/estimates/);
   });
 
-  it('cannot overspend the last credit with parallel requests', async () => {
-    await setCredits(1);
-    const { cookie } = await newUser();
-    groq.enqueue({ kind: 'json', content: ANALYSIS_JSON }, { kind: 'json', content: ANALYSIS_JSON }, { kind: 'json', content: ANALYSIS_JSON });
-    const results = await Promise.all([1, 2, 3].map(() => call(analyze, 'POST', '/api/ai/analyze', { cookie, body: analysisBody })));
-    expect(results.map((r) => r.status).sort()).toEqual([201, 402, 402]);
-    expect(groq.calls).toHaveLength(1);
-  });
-
   it('enforces the per-minute request limit', async () => {
-    await setCredits(100, { requestsPerMinute: 2 });
+    await setRate(2);
     const { cookie } = await newUser();
     groq.enqueue({ kind: 'json', content: HOOKS_JSON }, { kind: 'json', content: HOOKS_JSON });
     const body = { topic: 'Warm ups for runners' };

@@ -47,7 +47,9 @@ npm run admin:promote -- you@example.com
 | `DATABASE_URL` | production | Postgres connection string. |
 | `PGLITE_DIR` | no | Folder for the embedded dev database. |
 | `YOUTUBE_API_KEY` | for tracking | Google API key with YouTube Data API v3 enabled. Read only on the server. |
-| `SUPADATA_API_KEY` | for one-click analysis | Supadata key: transcripts, and TikTok / Instagram video numbers. Read only on the server. |
+| `APIFY_TOKEN` | for one-click analysis | Apify API token: YouTube transcripts, and TikTok / Instagram video numbers. Read only on the server. |
+| `APIFY_MONTHLY_BUDGET_USD` | no | Most to spend on Apify in a calendar month (UTC). Default 5. Never above 5 in code. Runs that would pass it are refused before they start. |
+| `APIFY_ACTOR_YOUTUBE_TRANSCRIPT`, `APIFY_ACTOR_TIKTOK`, `APIFY_ACTOR_INSTAGRAM` | no | Replace the default Apify Actors. See the defaults in `src/server/video/apify.ts`. |
 | `TRACK_INTERVAL_HOURS` | no | Hours between automatic checks of each channel. Default 6. |
 | `DISABLE_SCHEDULER` | no | `1` turns off the built-in timer. |
 | `CRON_SECRET` | no | Enables `POST /api/cron/refresh` for an external scheduler. At least 16 characters. |
@@ -79,35 +81,48 @@ official YouTube Data API v3.
 The free quota is 10,000 units a day. Adding a channel or checking it costs 3
 units, so 25 channels checked every 6 hours use about 300 units a day.
 
-## Get a Supadata key (free plan)
+## Get an Apify token
 
-One-click analysis needs a video's transcript, and TikTok and Instagram links
-need their numbers. Neither is available from the platforms' own free APIs, so
-the app uses Supadata for both.
+One-click analysis needs a YouTube video's transcript, and TikTok and Instagram
+links need their numbers. Neither is available from the platforms' own free
+APIs, so the app runs Apify scrapers for both.
 
-1. Sign up at https://supadata.ai (the free plan is 100 requests a month, no card).
-2. Copy the API key from its dashboard.
-3. Put it in `.env` as `SUPADATA_API_KEY=...` and restart the app.
+1. Sign up at https://apify.com. The free plan includes a monthly platform
+   credit; check the current amount on its pricing page.
+2. Copy the API token from Settings, then Integrations.
+3. Put it in `.env` as `APIFY_TOKEN=...` and restart the app.
 
-What a request is spent on:
+The default Actors are `devsef~youtube-transcript-scraper` (YouTube captions),
+`clockworks~tiktok-scraper` (TikTok) and `apify~instagram-reel-scraper`
+(Instagram single reels and account checks). Their input fields were written against the Actors' documentation
+and have not been run live yet, so check the first real run's output.
+TikTok and Instagram transcripts are not available: paste one in instead.
 
-| Action | Requests |
+What an Apify run is spent on:
+
+| Action | Runs |
 |---|---|
-| First breakdown of a video that has captions | 1 |
-| First breakdown of a video without captions (transcribed by the service) | 2 per minute of video |
+| First breakdown of a YouTube video | 1 transcript run |
 | Breaking the same video down again | 0, the transcript is stored |
-| Adding a TikTok or Instagram video by link | 1 |
-| "Update numbers" on a TikTok or Instagram video | 1 |
+| Adding a TikTok or Instagram video by link | 1 run of the matching Actor |
+| "Update numbers" on a TikTok or Instagram video | 1 run |
 | Anything on YouTube except transcripts | 0, it uses the YouTube API |
 
-Videos longer than 10 minutes are never sent for paid transcription; they use
-existing captions or ask you to paste a transcript. Without a key the app
-still works: every video page has a "Paste a transcript instead" box.
+The app keeps its own monthly ledger (`apify_runs`). Before each run it reserves
+the most the run can cost at the Actor's listed price, refuses it if the month's
+spend would pass the budget, and sends the reservation to Apify as
+`maxTotalChargeUsd` so Apify stops the run at that cost. Failed runs keep their
+reservation. Each run is billed by Apify against the monthly credit, so a long transcript
+costs the same as a short one. Each Instagram account is one run per check, so
+the number of Instagram accounts and `TRACK_INTERVAL_HOURS` set the spend. Without a token the app still works: every
+video page has a "Paste a transcript instead" box.
 
 ## How tracking works
 
-- **Adding a competitor.** Paste a channel link, an `@handle`, or any video or
-  Short from the channel. Old-style `/c/name` links cannot be looked up.
+- **Adding a competitor.** Paste a YouTube channel link, an `@handle`, or any
+  video or Short from the channel (old-style `/c/name` links cannot be looked
+  up). Or paste an Instagram profile, like `instagram.com/name`. Instagram
+  accounts are read through Apify, so they need `APIFY_TOKEN`.
 - **Checks.** Each check reads the channel's subscriber count and its 50 most
   recent uploads, and stores a snapshot of every number. Channels are checked
   every `TRACK_INTERVAL_HOURS` (default 6) by a timer inside the server, so
@@ -126,7 +141,7 @@ still works: every video page has a "Paste a transcript instead" box.
 - **Shorts.** The API has no "is a Short" field. A video of 3 minutes or less
   is counted as a Short, which will misfile a few short ordinary videos.
 - **Transcripts.** The official YouTube API only gives transcripts to a video's
-  owner, so transcripts come from Supadata (see above) and are stored on the
+  owner, so transcripts come from Apify (see above) and are stored on the
   video after the first fetch. The app itself does not scrape youtube.com,
   tiktok.com or instagram.com.
 - **TikTok and Instagram.** There is no free source that lists an account's
@@ -156,7 +171,7 @@ still works: every video page has a "Paste a transcript instead" box.
 | `/app/hooks` | **Hook writer.** Hooks for a topic. Each can be copied or sent to the script writer. |
 | `/app/scripts` | **Script writer.** From a new idea, from a breakdown (remix), or from your own draft. Streams in line by line with the second each line is spoken, and can be stopped. |
 | `/app/library` | Everything generated (breakdowns, hooks, scripts, reports), filterable, with a page per item and delete. |
-| `/app/usage` | Credits used, tokens, estimated cost, per-tool totals, recent requests. |
+| `/app/usage` | Tokens, estimated cost, per-tool totals, recent requests. |
 | `/app/settings` | Account, your creator profile (used in every hook and script), sign out. Admins also get limits and an account list. |
 
 Pages under `/app` redirect to sign-in without a session. On phones the
@@ -179,8 +194,8 @@ route handler ─► feature (prompt + schema) ─► ai/service.ts ─► Groq
   no fallback: when Groq fails, the user is told Groq failed.
 - `src/server/ai/service.ts` exposes `generateJson` (structured output) and
   `openTextStream` (streaming). Every feature uses one of these.
-- Before each call, `limits.ts` checks the per-minute limit and the monthly
-  credit quota under a per-user database lock, and reserves the credits.
+- Before each call, `limits.ts` checks the per-minute limit under a per-user
+  database lock. There are no plans or monthly quotas; this is a personal tool.
 - After each call, `usage.ts` records model, status, latency, error code, and
   the token counts **Groq reported**. For streams these come from the
   `x_groq.usage` field of the final chunk. If Groq reports none, the token
@@ -188,8 +203,6 @@ route handler ─► feature (prompt + schema) ─► ai/service.ts ─► Groq
 - Cost is an estimate: tokens x list price as read from Groq's models page on
   2026-10-04 (`src/server/ai/pricing.ts`). Models with no public price get no
   cost. The API labels it as an estimate.
-- Failed requests refund their credits. A script the user cancels after text
-  has started arriving keeps its charge.
 
 To add an AI feature: add its name to `FEATURES` in `src/server/settings.ts`,
 write a file in `src/server/ai/features/`, call the service. Limits and usage
@@ -223,10 +236,8 @@ All bodies are JSON. Errors are `{ "error": { "code", "message" } }`.
 | `POST /api/ai/script` | session | `{idea?, draft?, hook?, framework?, lengthSeconds?, tone?, audience?, platform?, callToAction?, referenceTranscript?}` (one of `idea` or `draft` is required). Server-sent events: `start`, `delta`, then `done` or `error`. |
 | `GET /api/generations` | session | Saved outputs. `?kind=&before=&limit=` |
 | `GET` / `DELETE /api/generations/:id` | owner | One saved output. |
-| `GET /api/usage` | session | Credits, tokens, estimated cost, by feature and model, last 50 requests. |
-| `GET` / `PUT /api/admin/limits` | admin | Plan credit allowances, requests per minute, credit cost per action. |
-| `GET /api/admin/users` | admin | Newest 50 accounts with plan and credits used. `?q=` filters by email. |
-| `GET` / `PUT /api/admin/users/:id` | admin | Set a user's plan and per-user quota overrides. |
+| `GET /api/usage` | session | Tokens, estimated cost, by feature and model, last 50 requests. |
+| `GET` / `PUT /api/admin/limits` | admin | Safety limits: AI requests per minute and tracked channels. |
 
 Tracking error codes: `invalid_link` (400), `channel_not_found` (404),
 `video_not_found` (404), `channel_limit` (403), `checked_recently` (429),
@@ -235,8 +246,8 @@ Tracking error codes: `invalid_link` (400), `channel_not_found` (404),
 
 Transcript error codes: `transcripts_not_configured` (503),
 `transcript_unavailable` (422), `transcript_quota` (429),
-`transcript_plan_limit` (402), `transcript_timeout` (504). None of them charge
-a credit, and each leads to the paste-a-transcript box.
+`transcript_plan_limit` (402), `transcript_timeout` (504). Each leads to the
+paste-a-transcript box.
 
 AI error codes: `ai_rate_limited` (429, with `Retry-After`), `ai_unavailable`
 (503), `ai_timeout` (504), `ai_model_unavailable` (503), `ai_not_configured`
@@ -251,15 +262,15 @@ AI error codes: `ai_rate_limited` (429, with `Retry-After`), `ai_unavailable`
 - Every data query filters by the signed-in user's id on the server. Channel
   and video rows are shared between accounts that track the same channel, and
   every read joins through the caller's own tracking list.
-- The YouTube key is sent only to googleapis.com and the Supadata key only to
-  api.supadata.ai. Neither is logged or returned.
+- The YouTube key is sent only to googleapis.com and the Apify token only to
+  api.apify.com, in a request header. Neither is logged or returned.
 - A transcript you paste for a tracked video is used for your breakdown only.
   Only transcripts fetched from the service are stored on the shared video row.
 - Image links from other sites are shown only if they are http(s) links.
 - Writes from another origin are rejected; bodies must be JSON and under 200 KB;
   all input is validated with zod.
 - Login locks after 10 failures per email in 15 minutes. Signup is limited per IP.
-- Role and plan cannot be set from signup. Admin is granted from the command line.
+- Role cannot be set from signup. Admin is granted from the command line.
 - Unknown errors return a reference id; details go to the server log only.
 - Text pasted by users (transcripts, ideas) is fenced in the prompt and the
   model is told to treat it as material, not instructions.
@@ -297,8 +308,7 @@ retries, quotas, parallel overspend, per-minute limits, script timing, and a
 source scan proving no other AI provider or key exposure.
 
 One-click analysis and videos by link are tested against a stand-in for
-Supadata (`tests/support/fake-supadata.ts`): transcript fetch and reuse, job
-polling, missing transcripts, missing or rejected keys, a used-up allowance,
+Apify (`tests/support/fake-apify.ts`): transcript fetch and reuse, missing transcripts, missing or rejected keys, a used-up allowance,
 long videos, TikTok and Instagram links, on-request updates, privacy between
 accounts, the hook library, the creator profile, drafts and channel reports.
 
@@ -320,14 +330,14 @@ npx tsx tests/support/serve-fake-groq.ts        # canned answers on ports 4010 t
 npm run build
 NODE_ENV=test GROQ_BASE_URL=http://127.0.0.1:4010 GROQ_API_KEY=test \
   YOUTUBE_API_BASE_URL=http://127.0.0.1:4011 YOUTUBE_API_KEY=test \
-  SUPADATA_BASE_URL=http://127.0.0.1:4012 SUPADATA_API_KEY=test npm start
+  APIFY_BASE_URL=http://127.0.0.1:4012 APIFY_TOKEN=apify_test_token npm start
 ```
 
 In that mode the database is in memory and the answers are canned, so use it
 only to look around. Two made-up channels exist there: `@runfaster` and
 `@kitchenshortcuts`.
 
-**Not tested: a real call to Groq, YouTube or Supadata.** The build
+**Not tested: a real call to Groq, YouTube or Apify.** The build
 environment could not reach any of them. The clients follow each service's
 published API reference, but your first real request to each is its first
 real run. Before relying on it, run one request of each kind with a real
@@ -348,20 +358,19 @@ logged-in app and the help centre were not inspected.
 | Hook writer | Built. Uses general hook patterns written for this project and your creator profile, **not** a library of proven high-view templates, which the reference has and we do not. |
 | Hook library | Built from your own breakdowns (the hook of each analysed video). The reference's is drawn from its whole database. |
 | Script writer | Built, streaming: from an idea, from a video breakdown (remix), or from your own draft. Six storytelling structures written for this project. |
-| One-click video analysis | Built for YouTube, TikTok and Instagram links: transcript fetched automatically, then idea, hook, format, structure and remix ideas. **Text only**: it does not see visuals, editing or audio, so there is no visual-layout breakdown. |
-| Watchlist, channel tracking, outlier feed | Built for **YouTube** through Google's official API. |
-| TikTok and Instagram | Single videos by link only. Monitoring whole accounts is not built: no free source lists an account's videos, and it would need a paid data service. |
-| Monitoring of uploads, views, subscribers, momentum | Built for YouTube. Runs while the app is running; history starts when a channel is added. |
+| One-click video analysis | Built for YouTube links, where the transcript is fetched automatically. TikTok and Instagram links need a pasted transcript. Analysis is then idea, hook, format, structure and remix ideas. **Text only**: it does not see visuals, editing or audio, so there is no visual-layout breakdown. |
+| Watchlist, channel tracking, outlier feed | Built for **YouTube** through Google's official API, and for **Instagram accounts** through Apify. |
+| TikTok | Single videos by link only. Whole-account monitoring is not built: no free source lists a TikTok account's videos. |
+| Monitoring of uploads, views, subscribers, momentum | Built for YouTube and Instagram accounts. Runs while the app is running; history starts when a channel is added. Each Instagram account check is one Apify run. |
 | Reports | A channel report (what is working, topics, title patterns, recommendations) is built. The reference's other report types are not. |
 | Your own channel's stats | Built by marking a YouTube channel as yours (public numbers only; no account connection, so no private analytics such as retention). |
 | Creator profile | Built as one text field that shapes hooks and scripts. |
 | Saved outputs | Built as a Library with a filter by type. Projects and folders are not built. |
-| Credits, plan allowances, usage stats | Built. Pro / Visionary / Titan allowances follow the reference's pricing page. The Starter allowance (10) and per-action costs are our own defaults. Credits reset on the calendar month (UTC), not a billing date. |
+| Usage stats | Built. No plans or credit quotas: personal use. |
 | Admin limits and quotas | Built, in Settings for admins. |
 | Curated Collections, database of millions of outlier videos | Cannot be reproduced. They are the reference's own data. |
 | Finding new channels in your niche | Not built. |
 | Bulk analysis, workspaces, guest access, public API, MCP server | Not built. |
-| Subscriptions and billing | Not built. Plans are set by an admin. |
 | Interface | Built for the features above, desktop and phone, with our own design. It follows the reference's flow (watchlist, videos, analysis, script) as described in writing; the reference's logged-in screens and demo video were not seen. |
 | Changing name, email or password in Settings | Not built. |
 I fucking hate this life because i just hate it oh my god nada danndasa asdjdn ada dan sda sa dasdhad aasd 

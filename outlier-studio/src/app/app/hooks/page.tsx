@@ -6,7 +6,7 @@ import { REMIX_KEY } from '@/components/GenerationViews';
 import { HooksList } from '@/components/GenerationViews';
 import { PlatformSelect } from '@/components/PlatformSelect';
 import { ErrorNotice, Field, PageHead, useReveal, ReferenceTranscript, Skeleton } from '@/components/ui';
-import { api, compact, refreshCredits, type ApiError } from '@/lib/api';
+import { api, compact, type ApiError } from '@/lib/api';
 import type { Generation } from '@/lib/types';
 
 type HooksGeneration = Extract<Generation, { kind: 'hooks' }>;
@@ -47,7 +47,6 @@ function HooksTool() {
       setError(err as ApiError);
     } finally {
       setBusy(false);
-      refreshCredits();
     }
   }
 

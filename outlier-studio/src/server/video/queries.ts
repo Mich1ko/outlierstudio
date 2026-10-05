@@ -1,13 +1,13 @@
 import 'server-only';
-import { and, asc, desc, eq, gte, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, lte, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { getDb } from '../db/client';
 import { channels, channelSnapshots, generations, trackedChannels, videos, videoSnapshots } from '../db/schema';
 import { env } from '../env';
 import { notFound } from '../errors';
 import { getLimits } from '../settings';
-import { supadataConfigured } from './supadata';
-import { youtubeConfigured } from './youtube';
+import { apifyBudgetUsd, apifyConfigured, apifySpendThisMonth } from './apify';
+import { MONITORED_PLATFORMS, platformConfigured, platformStatus } from './platforms';
 
 /**
  * Every query here joins through tracked_channels on the caller's user id, so
@@ -67,8 +67,10 @@ export async function listChannels(userId: string) {
 
   return {
     items,
-    configured: youtubeConfigured(),
-    transcriptsConfigured: supadataConfigured(),
+    configured: MONITORED_PLATFORMS.some(platformConfigured),
+    platforms: platformStatus(),
+    transcriptsConfigured: apifyConfigured(),
+    apifyBudget: { spentUsd: await apifySpendThisMonth(), budgetUsd: apifyBudgetUsd() },
     intervalHours: env().TRACK_INTERVAL_HOURS,
     limit: (await getLimits(db)).trackedChannelsPerUser,
   };
@@ -81,7 +83,19 @@ export const VideoQuery = z.object({
   platform: z.enum(['youtube', 'tiktok', 'instagram']).optional(),
   type: z.enum(['shorts', 'long', 'all']).default('shorts'),
   days: z.enum(['7', '30', '90', 'all']).default('30'),
-  sort: z.enum(['outlier', 'momentum', 'recent', 'views']).default('outlier'),
+  sort: z.enum(['outlier', 'momentum', 'recent', 'views', 'engagement']).default('outlier'),
+  /** Overrides days when set: only videos posted in the last N days. */
+  withinDays: z.coerce.number().int().min(1).max(3650).optional(),
+  /** Words to find in the title or caption. */
+  q: z.string().trim().max(100).optional(),
+  minOutlier: z.coerce.number().min(0).optional(),
+  maxOutlier: z.coerce.number().min(0).optional(),
+  minViews: z.coerce.number().min(0).optional(),
+  maxViews: z.coerce.number().min(0).optional(),
+  /** Engagement rate in percent: likes plus comments over views. */
+  minEngagement: z.coerce.number().min(0).optional(),
+  maxEngagement: z.coerce.number().min(0).optional(),
+  status: z.enum(['all', 'analyzed', 'unanalyzed']).default('all'),
   limit: z.coerce.number().int().min(1).max(60).default(30),
   offset: z.coerce.number().int().min(0).max(5000).default(0),
 });
@@ -109,9 +123,15 @@ const videoColumns = {
   monitored: channels.monitored,
 };
 
+const engagement = sql<number | null>`((coalesce(${videos.likeCount}, 0) + coalesce(${videos.commentCount}, 0))::float8 / nullif(${videos.viewCount}, 0) * 100)`;
+
 export async function listVideos(userId: string, q: z.infer<typeof VideoQuery>) {
   const db = await getDb();
+  const analyzed = sql<boolean>`exists (select 1 from ${generations} where ${generations.videoId} = ${videos.id} and ${generations.userId} = ${userId} and ${generations.kind} = 'analysis')`;
+  const since = q.withinDays ?? (q.days === 'all' ? null : Number(q.days));
+  const like = q.q ? `%${q.q.replace(/[\\%_]/g, (c) => `\\${c}`)}%` : null;
   const order = {
+    engagement: sql`${engagement} desc nulls last`,
     outlier: sql`${videos.outlierMultiple} desc nulls last`,
     momentum: sql`${videos.viewsPerHour} desc nulls last`,
     views: sql`${videos.viewCount} desc nulls last`,
@@ -119,17 +139,25 @@ export async function listVideos(userId: string, q: z.infer<typeof VideoQuery>) 
   }[q.sort];
 
   const rows = await db
-    .select(videoColumns)
+    .select({ ...videoColumns, analyzed })
     .from(videos)
     .innerJoin(channels, eq(channels.id, videos.channelId))
     .innerJoin(trackedChannels, and(eq(trackedChannels.channelId, channels.id), eq(trackedChannels.userId, userId)))
     .where(
       and(
+        like ? sql`(${videos.title} ilike ${like} or ${videos.description} ilike ${like})` : undefined,
+        q.minOutlier !== undefined ? gte(videos.outlierMultiple, q.minOutlier) : undefined,
+        q.maxOutlier !== undefined ? lte(videos.outlierMultiple, q.maxOutlier) : undefined,
+        q.minViews !== undefined ? gte(videos.viewCount, q.minViews) : undefined,
+        q.maxViews !== undefined ? lte(videos.viewCount, q.maxViews) : undefined,
+        q.minEngagement !== undefined ? sql`${engagement} >= ${q.minEngagement}` : undefined,
+        q.maxEngagement !== undefined ? sql`${engagement} <= ${q.maxEngagement}` : undefined,
+        q.status === 'all' ? undefined : q.status === 'analyzed' ? analyzed : sql`not ${analyzed}`,
         q.channelId ? eq(videos.channelId, q.channelId) : undefined,
         q.scope === 'all' ? undefined : eq(trackedChannels.isOwn, q.scope === 'mine'),
         q.platform ? eq(channels.platform, q.platform) : undefined,
         q.type === 'all' ? undefined : eq(videos.isShort, q.type === 'shorts'),
-        q.days === 'all' ? undefined : gte(videos.publishedAt, new Date(Date.now() - Number(q.days) * DAY)),
+        since === null ? undefined : gte(videos.publishedAt, new Date(Date.now() - since * DAY)),
       ),
     )
     .orderBy(order, desc(videos.publishedAt))
@@ -181,7 +209,7 @@ export async function getVideoDetail(userId: string, videoId: string) {
     history,
     latestAnalysis: analyses[0] ?? null,
     analyses: analyses.map((a) => ({ id: a.id, title: a.title, createdAt: a.createdAt })),
-    transcriptsConfigured: supadataConfigured(),
+    transcriptsConfigured: apifyConfigured(),
   };
 }
 

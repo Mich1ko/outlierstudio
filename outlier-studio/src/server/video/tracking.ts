@@ -1,6 +1,7 @@
 import 'server-only';
 import { and, asc, desc, eq, inArray, isNull, lt, or, sql } from 'drizzle-orm';
 import { parseVideoLink } from '@/shared/video-url';
+import { parseChannelInput } from '@/shared/channel-url';
 import { parseYouTubeInput, SHORT_MAX_SECONDS, youtubeVideoUrl } from '@/shared/youtube-url';
 import { getDb } from '../db/client';
 import { channels, channelSnapshots, trackedChannels, videos, videoSnapshots } from '../db/schema';
@@ -8,8 +9,9 @@ import { env } from '../env';
 import { AppError, notFound } from '../errors';
 import { getLimits } from '../settings';
 import { baselineViews, outlierMultiple, viewsPerHour } from './metrics';
-import { fetchTranscript, fetchVideoMetadata } from './supadata';
-import { fetchChannel, fetchRecentVideoIds, fetchVideos, type ChannelInfo, type VideoInfo } from './youtube';
+import { fetchTranscript, fetchVideoMetadata } from './apify';
+import { fetchVideos, type ChannelInfo, type VideoInfo } from './youtube';
+import { fetchSnapshot, lookupChannel, MONITORED_PLATFORMS, platformConfigured, type MonitoredPlatform } from './platforms';
 
 const SNAPSHOT_RETENTION_DAYS = 90;
 /** A person can re-check a channel by hand at most this often. */
@@ -30,8 +32,12 @@ function channelColumns(info: ChannelInfo) {
 
 /** Starts tracking a channel for a user, from a channel link, @handle or video link. */
 export async function addChannel(userId: string, input: string): Promise<{ channelId: string; alreadyTracked: boolean }> {
-  const parsed = parseYouTubeInput(input);
+  const parsed = parseChannelInput(input);
   if (!parsed.ok) throw new AppError(400, 'invalid_link', parsed.reason);
+  const platform = parsed.channel.platform;
+  if (!platformConfigured(platform)) {
+    throw new AppError(503, 'video_data_not_configured', `Tracking ${platform === 'youtube' ? 'YouTube' : 'Instagram'} needs its API credentials on the server.`);
+  }
 
   const db = await getDb();
   const limit = (await getLimits(db)).trackedChannelsPerUser;
@@ -43,13 +49,15 @@ export async function addChannel(userId: string, input: string): Promise<{ chann
     .where(and(eq(trackedChannels.userId, userId), eq(channels.monitored, true)));
   const tracked = mine?.n ?? 0;
 
-  const info = await fetchChannel(parsed.ref);
-  if (!info) throw new AppError(404, 'channel_not_found', 'YouTube has no channel or video at that link.');
+  const found = await lookupChannel(parsed.channel);
+  if (!found) throw new AppError(404, 'channel_not_found', `${platform === 'youtube' ? 'YouTube' : 'Instagram'} has no channel or video at that link.`);
+  const { info } = found;
 
+  // A profile first added by a single pasted link is already in the table, unmonitored: it becomes monitored here.
   const [channel] = await db
     .insert(channels)
-    .values({ platform: 'youtube', externalId: info.externalId, ...channelColumns(info) })
-    .onConflictDoUpdate({ target: [channels.platform, channels.externalId], set: channelColumns(info) })
+    .values({ platform, monitored: true, externalId: info.externalId, ...channelColumns(info) })
+    .onConflictDoUpdate({ target: [channels.platform, channels.externalId], set: { monitored: true, ...channelColumns(info) } })
     .returning({ id: channels.id, lastCheckedAt: channels.lastCheckedAt });
   if (!channel) throw new Error('Failed to save channel');
 
@@ -67,7 +75,7 @@ export async function addChannel(userId: string, input: string): Promise<{ chann
 
   // First check happens straight away so the feed is not empty. A failure here
   // is recorded on the channel and retried by the scheduler.
-  if (!channel.lastCheckedAt) await refreshChannel(channel.id, { known: info }).catch(() => undefined);
+  if (!channel.lastCheckedAt) await refreshChannel(channel.id, { known: info, knownVideos: found.videos }).catch(() => undefined);
   return { channelId: channel.id, alreadyTracked: false };
 }
 
@@ -99,7 +107,7 @@ export async function refreshChannelNow(userId: string, channelId: string): Prom
   const db = await getDb();
   const [channel] = await db.select({ monitored: channels.monitored }).from(channels).where(eq(channels.id, channelId)).limit(1);
   if (!channel?.monitored) {
-    throw new AppError(400, 'not_monitored', 'TikTok and Instagram accounts cannot be checked as a whole. Update a video\'s numbers from its own page.');
+    throw new AppError(400, 'not_monitored', 'TikTok accounts cannot be checked as a whole. Update a video\'s numbers from its own page.');
   }
   const claimed = await refreshChannel(channelId, { minMinutesSinceLast: MANUAL_REFRESH_MINUTES, rethrow: true });
   if (!claimed) {
@@ -116,7 +124,7 @@ export async function refreshChannelNow(userId: string, channelId: string): Prom
  */
 export async function refreshChannel(
   channelId: string,
-  opts: { minMinutesSinceLast?: number; known?: ChannelInfo; rethrow?: boolean } = {},
+  opts: { minMinutesSinceLast?: number; known?: ChannelInfo; knownVideos?: VideoInfo[]; rethrow?: boolean } = {},
 ): Promise<boolean> {
   const db = await getDb();
   const now = new Date();
@@ -127,12 +135,16 @@ export async function refreshChannel(
     .update(channels)
     .set({ lastCheckedAt: now })
     .where(and(eq(channels.id, channelId), eq(channels.monitored, true), or(isNull(channels.lastCheckedAt), lt(channels.lastCheckedAt, cutoff))))
-    .returning({ externalId: channels.externalId });
+    .returning({ externalId: channels.externalId, platform: channels.platform });
   if (!claimed) return false;
 
   try {
-    const info = opts.known ?? (await fetchChannel({ kind: 'channelId', id: claimed.externalId }));
-    if (!info) throw new AppError(404, 'channel_not_found', 'This channel no longer exists on YouTube.');
+    const snapshot =
+      opts.known && opts.knownVideos
+        ? { info: opts.known, videos: opts.knownVideos }
+        : await fetchSnapshot(claimed.platform as MonitoredPlatform, claimed.externalId, opts.known);
+    if (!snapshot) throw new AppError(404, 'channel_not_found', 'This channel no longer exists on its platform.');
+    const { info } = snapshot;
 
     await db.update(channels).set({ ...channelColumns(info), lastError: null }).where(eq(channels.id, channelId));
     await db.insert(channelSnapshots).values({
@@ -143,8 +155,7 @@ export async function refreshChannel(
       videoCount: info.videoCount,
     });
 
-    const ids = info.uploadsPlaylistId ? await fetchRecentVideoIds(info.uploadsPlaylistId) : [];
-    const fetched = await fetchVideos(ids);
+    const fetched = snapshot.videos;
 
     // Previous snapshot of each video, read before the new ones are written.
     const known = await db.select({ id: videos.id, externalId: videos.externalId, viewsPerHour: videos.viewsPerHour }).from(videos).where(eq(videos.channelId, channelId));
@@ -245,32 +256,43 @@ export async function refreshDue(max = 20): Promise<{ checked: number; stoppedEa
   const db = await getDb();
   const intervalMinutes = env().TRACK_INTERVAL_HOURS * 60;
   const cutoff = new Date(Date.now() - intervalMinutes * 60_000);
+  const configured = MONITORED_PLATFORMS.filter(platformConfigured);
+  if (configured.length === 0) return { checked: 0, stoppedEarly: false };
   const due = await db
-    .selectDistinct({ id: channels.id, lastCheckedAt: channels.lastCheckedAt })
+    .selectDistinct({ id: channels.id, platform: channels.platform, lastCheckedAt: channels.lastCheckedAt })
     .from(channels)
     .innerJoin(trackedChannels, eq(trackedChannels.channelId, channels.id))
-    .where(and(eq(channels.monitored, true), or(isNull(channels.lastCheckedAt), lt(channels.lastCheckedAt, cutoff))))
+    .where(
+      and(
+        eq(channels.monitored, true),
+        inArray(channels.platform, configured),
+        or(isNull(channels.lastCheckedAt), lt(channels.lastCheckedAt, cutoff)),
+      ),
+    )
     .orderBy(sql`${channels.lastCheckedAt} asc nulls first`, asc(channels.id))
     .limit(max);
 
+  // A platform that runs out of quota or rejects its credentials is skipped for the rest of this run.
   let checked = 0;
+  const halted = new Set<string>();
   for (const channel of due) {
+    if (halted.has(channel.platform)) continue;
     try {
       if (await refreshChannel(channel.id, { minMinutesSinceLast: intervalMinutes, rethrow: true })) checked++;
     } catch (err) {
       checked++;
-      if (err instanceof AppError && (err.code === 'video_data_quota' || err.code === 'video_data_not_configured')) {
-        return { checked, stoppedEarly: true };
+      if (err instanceof AppError && (err.code === 'video_data_quota' || err.code === 'video_data_not_configured' || err.code === 'apify_budget')) {
+        halted.add(channel.platform);
       }
     }
   }
-  return { checked, stoppedEarly: false };
+  return { checked, stoppedEarly: halted.size > 0 };
 }
 
 /**
  * Adds one video from its link and returns its id.
  * YouTube: tracks the video's channel through the official API (free).
- * TikTok and Instagram: reads that single video through Supadata; the author
+ * TikTok and Instagram: reads that single video through Apify; the author
  * is saved so the video has a home, but the account is not monitored.
  */
 export async function addVideoByLink(userId: string, input: string): Promise<{ videoId: string; platform: string }> {
@@ -388,7 +410,7 @@ export async function ensureTranscript(video: { id: string; externalId: string; 
   if (video.transcript) return video.transcript;
   const url = video.sourceUrl ?? (video.platform === 'youtube' ? youtubeVideoUrl(video.externalId, video.isShort) : null);
   if (!url) throw notFound();
-  const fetched = await fetchTranscript(url, { durationSeconds: video.durationSeconds });
+  const fetched = await fetchTranscript(url);
   const db = await getDb();
   await db.update(videos).set({ transcript: fetched.text.slice(0, 60_000), transcriptLang: fetched.lang }).where(eq(videos.id, video.id));
   return fetched.text;

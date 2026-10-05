@@ -7,7 +7,7 @@ import { AnalysisView } from '@/components/GenerationViews';
 import { Picture } from '@/components/Picture';
 import { ErrorNotice, Field, Skeleton, useReveal } from '@/components/ui';
 import { ViewsChart } from '@/components/ViewsChart';
-import { api, refreshCredits, type ApiError } from '@/lib/api';
+import { api, type ApiError } from '@/lib/api';
 import { ago, compact, day, duration, num, when } from '@/lib/format';
 import type { Generation, VideoDetail } from '@/lib/types';
 import { PLATFORM_NAME } from '@/shared/video-url';
@@ -59,7 +59,6 @@ function VideoScreen() {
         if (PASTE_INSTEAD.has(e.code)) setPasteOpen(true);
       } finally {
         setBusy(false);
-        refreshCredits();
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -200,7 +199,7 @@ function VideoScreen() {
               <button type="button" className="btn btn-sm" onClick={() => analyze()}>
                 Break it down again
               </button>
-              <span className="muted small">Uses 1 credit.{video.hasTranscript ? ' The transcript is already saved, so no new one is fetched.' : ''}</span>
+              <span className="muted small">{video.hasTranscript ? 'The transcript is already saved, so no new one is fetched.' : ''}</span>
             </div>
           </>
         ) : (
@@ -208,14 +207,14 @@ function VideoScreen() {
             <p>Get this video&apos;s hook, its structure beat by beat, and ideas for your own version.</p>
             {!data.transcriptsConfigured && !video.hasTranscript && (
               <p className="notice">
-                Automatic transcripts are not set up on this server (it needs a <code>SUPADATA_API_KEY</code>). You can still paste a transcript below.
+                Automatic transcripts are not set up on this server (it needs an <code>APIFY_TOKEN</code>). You can still paste a transcript below.
               </p>
             )}
             <div className="row">
               <button type="button" className="btn btn-primary" onClick={() => analyze()}>
                 Analyze this video
               </button>
-              <span className="muted small">Fetches the transcript for you. Uses 1 credit.</span>
+              <span className="muted small">Fetches the transcript for you.</span>
             </div>
           </div>
         )}

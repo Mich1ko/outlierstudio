@@ -34,6 +34,10 @@ export type VideoInfo = {
   viewCount: number | null;
   likeCount: number | null;
   commentCount: number | null;
+  /** The video's own page, for platforms where it cannot be built from the id. */
+  sourceUrl?: string | null;
+  /** Set by platforms that know the format. Otherwise it is inferred from the duration. */
+  isShort?: boolean;
 };
 
 const notConfigured = (message: string) => new AppError(503, 'video_data_not_configured', message);
@@ -49,7 +53,7 @@ export function youtubeConfigured(): boolean {
 
 type ApiError = { error?: { code?: number; message?: string; errors?: { reason?: string }[] } };
 
-async function call<T>(resource: string, params: Record<string, string>): Promise<T> {
+export async function call<T>(resource: string, params: Record<string, string>): Promise<T> {
   const key = env().YOUTUBE_API_KEY;
   if (!key) throw notConfigured('Competitor tracking needs a YouTube API key on the server.');
 
@@ -91,7 +95,7 @@ const toInt = (v: string | undefined): number | null => {
 type Thumbs = Record<string, { url?: string } | undefined> | undefined;
 const thumb = (t: Thumbs) => t?.medium?.url ?? t?.high?.url ?? t?.default?.url ?? null;
 
-type ChannelResource = {
+export type ChannelResource = {
   id: string;
   snippet?: { title?: string; customUrl?: string; thumbnails?: Thumbs };
   statistics?: { viewCount?: string; subscriberCount?: string; hiddenSubscriberCount?: boolean; videoCount?: string };
@@ -105,7 +109,7 @@ type VideoResource = {
   contentDetails?: { duration?: string };
 };
 
-function toChannel(c: ChannelResource): ChannelInfo {
+export function toChannel(c: ChannelResource): ChannelInfo {
   const s = c.statistics ?? {};
   return {
     externalId: c.id,

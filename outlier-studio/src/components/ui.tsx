@@ -47,11 +47,6 @@ export function ErrorNotice({ error }: { error: ApiError | null }) {
   }, [error]);
   if (!error) return null;
   const next: Record<string, ReactNode> = {
-    quota_exceeded: (
-      <>
-        Your credits reset at the start of next month. See <a href="/app/usage">Usage</a>.
-      </>
-    ),
     rate_limited: 'Wait a minute, then try again.',
     ai_rate_limited: error.retryAfterSeconds ? `Try again in about ${Math.ceil(error.retryAfterSeconds)} seconds.` : 'Try again in a moment.',
     ai_model_unavailable: 'Nothing was charged.',

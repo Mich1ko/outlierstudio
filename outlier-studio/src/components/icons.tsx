@@ -1,6 +1,12 @@
 const base = { viewBox: '0 0 20 20', fill: 'none', stroke: 'currentColor', strokeWidth: 1.7, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true } as const;
 
 export const Icon = {
+  search: () => (
+    <svg {...base}>
+      <circle cx="9" cy="9" r="5.5" />
+      <path d="M13 13l4 4" />
+    </svg>
+  ),
   feed: () => (
     <svg {...base}>
       <path d="M3 15l4.5-5 3 3L17 5" />

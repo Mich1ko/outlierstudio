@@ -21,7 +21,7 @@ export const LoginInput = z.object({ email, password: z.string().min(1).max(200)
 const LOGIN_WINDOW = 15 * 60;
 const SIGNUP_WINDOW = 60 * 60;
 
-const pick = (u: SessionUser): SessionUser => ({ id: u.id, email: u.email, name: u.name, role: u.role, plan: u.plan });
+const pick = (u: SessionUser): SessionUser => ({ id: u.id, email: u.email, name: u.name, role: u.role });
 
 export async function signup(input: z.infer<typeof SignupInput>, ip: string): Promise<SessionUser> {
   await assertUnderLimit(`signup:${ip}`, 10, SIGNUP_WINDOW);
@@ -29,7 +29,7 @@ export async function signup(input: z.infer<typeof SignupInput>, ip: string): Pr
 
   const db = await getDb();
   const passwordHash = await hashPassword(input.password);
-  // Role and plan are never taken from the request body.
+  // Role is never taken from the request body.
   const inserted = await db
     .insert(users)
     .values({ email: input.email, name: input.name, passwordHash })

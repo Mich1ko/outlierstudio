@@ -35,7 +35,7 @@ export default async function Home() {
           <div className="hero-copy">
             <h1>Write your next short from the ones that already worked.</h1>
             <p className="lede">
-              Track the YouTube channels you compete with, see which of their videos are beating the channel&apos;s normal, and turn the winners into your own hooks and scripts.
+              Track the YouTube and Instagram accounts you compete with, see which of their videos are beating the channel&apos;s normal, and turn the winners into your own hooks and scripts.
             </p>
             <div className="row">
               <Link className="btn btn-primary" href={user ? '/app' : '/signup'}>
@@ -49,7 +49,7 @@ export default async function Home() {
         <ol className="steps">
           <li>
             <h2>Build a watchlist</h2>
-            <p>Add YouTube channels by link. New uploads, views and subscriber counts are checked on a schedule.</p>
+            <p>Add YouTube channels and Instagram accounts by link. New uploads, views and subscriber counts are checked on a schedule.</p>
           </li>
           <li>
             <h2>Find the outliers</h2>
@@ -63,7 +63,7 @@ export default async function Home() {
       </main>
 
       <footer className="site-foot">
-        <p>{APP.name}. Channel monitoring works with YouTube. Single videos can come from YouTube, TikTok or Instagram.</p>
+        <p>{APP.name}. Channel monitoring works with YouTube and Instagram. Single videos can come from YouTube, TikTok or Instagram.</p>
       </footer>
     </div>
   );

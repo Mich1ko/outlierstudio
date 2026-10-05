@@ -18,26 +18,26 @@ import { channels, videos, videoSnapshots } from '@/server/db/schema';
 import { refreshDue } from '@/server/video/tracking';
 import { parseVideoLink } from '@/shared/video-url';
 import { TRANSCRIPT, call, newUser, readSse, requestRows, useTestApp } from './support/app';
-import { FakeSupadata } from './support/fake-supadata';
+import { APIFY_TOKEN, FakeApify } from './support/fake-apify';
 import { FakeYouTube, sampleChannel } from './support/fake-youtube';
 
 const groq = useTestApp();
 const youtube = new FakeYouTube();
-const supadata = new FakeSupadata();
+const apify = new FakeApify();
 
 beforeAll(async () => {
   process.env.YOUTUBE_API_BASE_URL = await youtube.start();
-  process.env.SUPADATA_BASE_URL = await supadata.start();
+  process.env.APIFY_BASE_URL = await apify.start();
 });
 beforeEach(() => {
   youtube.reset();
-  supadata.reset();
+  apify.reset();
   process.env.YOUTUBE_API_KEY = 'yt_test_key';
-  process.env.SUPADATA_API_KEY = 'sd_test_key';
+  process.env.APIFY_TOKEN = APIFY_TOKEN;
 });
 afterAll(async () => {
   await youtube.stop();
-  await supadata.stop();
+  await apify.stop();
 });
 
 const ANALYSIS = JSON.stringify({
@@ -78,7 +78,7 @@ describe('one-click analysis', () => {
   it('fetches the transcript itself, analyses, and reuses the stored transcript next time', async () => {
     const { cookie, user } = await newUser();
     const video = await trackSample(cookie);
-    supadata.transcripts.set('https://www.youtube.com/shorts/a0000000050', TRANSCRIPT);
+    apify.transcripts.set('https://www.youtube.com/shorts/a0000000050', TRANSCRIPT);
     groq.enqueue({ kind: 'json', content: ANALYSIS }, { kind: 'json', content: ANALYSIS });
 
     const res = await oneClick(cookie, video.id);
@@ -86,8 +86,8 @@ describe('one-click analysis', () => {
     const { generation } = await res.json();
     expect(generation.input.transcript).toBe(TRANSCRIPT);
     expect(generation.output.outlierMultiple).toBe(15);
-    expect(supadata.calls).toHaveLength(1);
-    expect(supadata.calls[0]).toMatchObject({ path: '/transcript', key: 'sd_test_key', params: { url: 'https://www.youtube.com/shorts/a0000000050', text: 'true', mode: 'auto' } });
+    expect(apify.calls).toHaveLength(1);
+    expect(apify.calls[0]).toMatchObject({ actor: 'devsef~youtube-transcript-scraper', key: APIFY_TOKEN, input: { videoUrls: ['https://www.youtube.com/shorts/a0000000050'] } });
     expect(groq.calls[0]!.body.messages[1].content).toContain(TRANSCRIPT);
 
     const detail = await (await call(videoRoute, 'GET', `/api/videos/${video.id}`, { cookie, params: { id: video.id } })).json();
@@ -96,19 +96,9 @@ describe('one-click analysis', () => {
     expect(detail.transcriptsConfigured).toBe(true);
 
     expect((await oneClick(cookie, video.id)).status).toBe(201);
-    expect(supadata.calls).toHaveLength(1);
+    expect(apify.calls).toHaveLength(1);
     expect(await requestRows(user.id)).toHaveLength(2);
-    expect(JSON.stringify(detail)).not.toContain('sd_test_key');
-  });
-
-  it('waits for a transcript job when the service answers with one', async () => {
-    const { cookie } = await newUser();
-    const video = await trackSample(cookie);
-    supadata.defaultTranscript = TRANSCRIPT;
-    supadata.asyncUrls.add('https://www.youtube.com/shorts/a0000000050');
-    groq.enqueue({ kind: 'json', content: ANALYSIS });
-    expect((await oneClick(cookie, video.id)).status).toBe(201);
-    expect(supadata.calls.map((c) => c.path)).toEqual(['/transcript', '/transcript/job-1', '/transcript/job-1']);
+    expect(JSON.stringify(detail)).not.toContain(APIFY_TOKEN);
   });
 
   it('says when there is no transcript, charges nothing, and accepts a pasted one instead', async () => {
@@ -130,40 +120,30 @@ describe('one-click analysis', () => {
   it('reports a missing key, a rejected key and a used-up allowance', async () => {
     const { cookie } = await newUser();
     const video = await trackSample(cookie);
-    delete process.env.SUPADATA_API_KEY;
+    delete process.env.APIFY_TOKEN;
     const none = await oneClick(cookie, video.id);
     expect(none.status).toBe(503);
     expect((await none.json()).error.code).toBe('transcripts_not_configured');
-    expect(supadata.calls).toHaveLength(0);
+    expect(apify.calls).toHaveLength(0);
 
-    process.env.SUPADATA_API_KEY = 'sd_test_key';
-    supadata.failNext = { status: 401, error: 'unauthorized' };
+    process.env.APIFY_TOKEN = APIFY_TOKEN;
+    apify.failNext = { status: 401, message: 'unauthorized' };
     expect((await (await oneClick(cookie, video.id)).json()).error.code).toBe('transcripts_not_configured');
-    supadata.failNext = { status: 429, error: 'limit-exceeded' };
+    apify.failNext = { status: 429, message: 'limit exceeded' };
     const quota = await oneClick(cookie, video.id);
     expect(quota.status).toBe(429);
     expect((await quota.json()).error.code).toBe('transcript_quota');
     expect(groq.calls).toHaveLength(0);
   });
 
-  it('does not pay for AI transcription of long videos', async () => {
-    const { cookie } = await newUser();
-    await trackSample(cookie);
-    const long = (await (await call(videosRoute, 'GET', '/api/videos?type=long&days=all', { cookie })).json()).items[0];
-    supadata.defaultTranscript = TRANSCRIPT;
-    groq.enqueue({ kind: 'json', content: ANALYSIS });
-    expect((await oneClick(cookie, long.id)).status).toBe(201);
-    expect(supadata.calls[0]!.params).toMatchObject({ mode: 'native', url: 'https://www.youtube.com/watch?v=a0000000060' });
-  });
-
   it("refuses another account's video before any request is spent", async () => {
     const alice = await newUser('alice@example.com');
     const bob = await newUser('bob@example.com');
     const video = await trackSample(alice.cookie);
-    supadata.defaultTranscript = TRANSCRIPT;
+    apify.defaultTranscript = TRANSCRIPT;
     expect((await oneClick(bob.cookie, video.id)).status).toBe(404);
     expect((await call(refreshVideoRoute, 'POST', `/api/videos/${video.id}/refresh`, { cookie: bob.cookie, params: { id: video.id } })).status).toBe(404);
-    expect(supadata.calls).toHaveLength(0);
+    expect(apify.calls).toHaveLength(0);
     expect(groq.calls).toHaveLength(0);
   });
 });
@@ -171,10 +151,9 @@ describe('one-click analysis', () => {
 describe('adding a single video by link', () => {
   const post = { platform: 'tiktok' as const, id: '7301234567890123456', username: 'chefmaya', displayName: 'Chef Maya', title: 'Stop rinsing your rice like this', views: 480000, likes: 31000, comments: 900 };
 
-  it('reads a TikTok video, files it under its author, and analyses it in one click', async () => {
+  it('reads a TikTok video, files it under its author, and analyses it once a transcript is pasted in', async () => {
     const { cookie } = await newUser();
-    supadata.posts.set(TIKTOK, post);
-    supadata.transcripts.set(TIKTOK, TRANSCRIPT);
+    apify.posts.set(TIKTOK, post);
     const added = await call(addVideoRoute, 'POST', '/api/videos', { cookie, body: { url: `${TIKTOK}?lang=en` } });
     expect(added.status).toBe(201);
     const { videoId, platform } = await added.json();
@@ -190,17 +169,22 @@ describe('adding a single video by link', () => {
     expect(list.items[0]).toMatchObject({ platform: 'tiktok', monitored: false, title: 'Chef Maya' });
     expect(list.transcriptsConfigured).toBe(true);
 
+    // No configured Actor reads TikTok audio, so the analysis needs a pasted transcript.
+    const noTranscript = await oneClick(cookie, videoId);
+    expect(noTranscript.status).toBe(422);
+    expect((await noTranscript.json()).error.code).toBe('transcript_unavailable');
+    expect(groq.calls).toHaveLength(0);
+
     groq.enqueue({ kind: 'json', content: ANALYSIS });
-    const res = await oneClick(cookie, videoId);
+    const res = await oneClick(cookie, videoId, { transcript: TRANSCRIPT });
     expect(res.status).toBe(201);
-    expect(supadata.calls.at(-1)).toMatchObject({ path: '/transcript', params: { url: TIKTOK } });
     expect(groq.calls[0]!.body.messages[1].content).toContain('Platform: tiktok');
     expect((await res.json()).generation.input.sourceUrl).toBe(TIKTOK);
   });
 
   it('never schedules checks for TikTok or Instagram authors, and updates their videos only on request', async () => {
     const { cookie } = await newUser();
-    supadata.posts.set(TIKTOK, post);
+    apify.posts.set(TIKTOK, post);
     const { videoId } = await (await call(addVideoRoute, 'POST', '/api/videos', { cookie, body: { url: TIKTOK } })).json();
     const db = await getDb();
     await db.update(channels).set({ lastCheckedAt: sql`now() - interval '30 days'` });
@@ -214,10 +198,10 @@ describe('adding a single video by link', () => {
     expect(soon.status).toBe(429);
     await db.update(videos).set({ lastCheckedAt: sql`now() - interval '2 hours'` });
     await db.update(videoSnapshots).set({ takenAt: sql`now() - interval '2 hours'` });
-    supadata.posts.set(TIKTOK, { ...post, views: 500000 });
-    const before = supadata.calls.length;
+    apify.posts.set(TIKTOK, { ...post, views: 500000 });
+    const before = apify.calls.length;
     expect((await call(refreshVideoRoute, 'POST', `/api/videos/${videoId}/refresh`, { cookie, params: { id: videoId } })).status).toBe(200);
-    expect(supadata.calls.length).toBe(before + 1);
+    expect(apify.calls.length).toBe(before + 1);
     const detail = await (await call(videoRoute, 'GET', `/api/videos/${videoId}`, { cookie, params: { id: videoId } })).json();
     expect(detail.video.viewCount).toBe(500000);
     expect(detail.video.viewsPerHour).toBeGreaterThan(9900);
@@ -229,7 +213,7 @@ describe('adding a single video by link', () => {
     const profile = await call(addVideoRoute, 'POST', '/api/videos', { cookie, body: { url: 'https://www.instagram.com/chefmaya/' } });
     expect(profile.status).toBe(400);
     expect((await profile.json()).error.message).toMatch(/not a profile/);
-    expect(supadata.calls).toHaveLength(0);
+    expect(apify.calls).toHaveLength(0);
     const missing = await call(addVideoRoute, 'POST', '/api/videos', { cookie, body: { url: TIKTOK } });
     expect(missing.status).toBe(404);
     expect((await call(addVideoRoute, 'POST', '/api/videos', { body: { url: TIKTOK } })).status).toBe(401);
@@ -241,7 +225,7 @@ describe('adding a single video by link', () => {
     const res = await call(addVideoRoute, 'POST', '/api/videos', { cookie, body: { url: 'https://www.youtube.com/shorts/a0000000050' } });
     expect(res.status).toBe(201);
     const { videoId } = await res.json();
-    expect(supadata.calls).toHaveLength(0);
+    expect(apify.calls).toHaveLength(0);
     const detail = await (await call(videoRoute, 'GET', `/api/videos/${videoId}`, { cookie, params: { id: videoId } })).json();
     expect(detail.video).toMatchObject({ title: 'Why stretching before a run slows you down', monitored: true, outlierMultiple: 15 });
     expect((await (await call(listChannelsRoute, 'GET', '/api/channels', { cookie })).json()).items).toHaveLength(1);
@@ -252,7 +236,7 @@ describe('hook library, creator profile, drafts and reports', () => {
   it('collects the hooks from your breakdowns with their source video', async () => {
     const { cookie } = await newUser();
     const video = await trackSample(cookie);
-    supadata.defaultTranscript = TRANSCRIPT;
+    apify.defaultTranscript = TRANSCRIPT;
     groq.enqueue({ kind: 'json', content: ANALYSIS }, { kind: 'json', content: ANALYSIS });
     await oneClick(cookie, video.id);
     await call(analyze, 'POST', '/api/ai/analyze', { cookie, body: { transcript: TRANSCRIPT, title: 'Pasted one' } });
@@ -305,7 +289,7 @@ describe('hook library, creator profile, drafts and reports', () => {
     expect(prompt).toContain('"Why stretching before a run slows you down" | short 58s');
     expect(prompt).toContain('150000 views | 15x');
     expect(prompt).toContain('This is a competitor of the reader.');
-    expect((await requestRows(user.id))[0]).toMatchObject({ feature: 'report', status: 'succeeded', creditsCharged: 1 });
+    expect((await requestRows(user.id))[0]).toMatchObject({ feature: 'report', status: 'succeeded' });
     const listed = await (await call(listGenerations, 'GET', '/api/generations?kind=report', { cookie })).json();
     expect(listed.items).toHaveLength(1);
 
@@ -315,7 +299,7 @@ describe('hook library, creator profile, drafts and reports', () => {
 
   it('needs five videos for a report', async () => {
     const { cookie } = await newUser();
-    supadata.posts.set(TIKTOK, { platform: 'tiktok', id: '1', username: 'chefmaya', displayName: 'Chef Maya', title: 't', views: 5 });
+    apify.posts.set(TIKTOK, { platform: 'tiktok', id: '1', username: 'chefmaya', displayName: 'Chef Maya', title: 't', views: 5 });
     await call(addVideoRoute, 'POST', '/api/videos', { cookie, body: { url: TIKTOK } });
     const channelId = (await (await call(listChannelsRoute, 'GET', '/api/channels', { cookie })).json()).items[0].id;
     const res = await call(report, 'POST', '/api/ai/report', { cookie, body: { channelId } });

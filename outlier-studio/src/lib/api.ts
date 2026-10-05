@@ -60,10 +60,6 @@ export async function api<T>(path: string, init: { method?: string; body?: unkno
   return (await res.json()) as T;
 }
 
-/** Tell the shell to re-read the credit balance after something was generated. */
-export function refreshCredits(): void {
-  window.dispatchEvent(new Event('credits:refresh'));
-}
 
 /** Drops empty strings so optional fields are omitted rather than sent as "". */
 export function compact<T extends Record<string, unknown>>(obj: T): Partial<T> {

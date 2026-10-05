@@ -10,7 +10,7 @@ const SESSION_DAYS = 30;
 
 const hashToken = (token: string) => createHash('sha256').update(token).digest('hex');
 
-export type SessionUser = Pick<User, 'id' | 'email' | 'name' | 'role' | 'plan'>;
+export type SessionUser = Pick<User, 'id' | 'email' | 'name' | 'role'>;
 
 function cookie(value: string, maxAgeSeconds: number): string {
   const parts = [`${SESSION_COOKIE}=${value}`, 'Path=/', 'HttpOnly', 'SameSite=Lax', `Max-Age=${maxAgeSeconds}`];
@@ -47,7 +47,7 @@ export async function getUserByToken(token: string | null | undefined): Promise<
   if (!token) return null;
   const db = await getDb();
   const rows = await db
-    .select({ id: users.id, email: users.email, name: users.name, role: users.role, plan: users.plan })
+    .select({ id: users.id, email: users.email, name: users.name, role: users.role })
     .from(sessions)
     .innerJoin(users, eq(users.id, sessions.userId))
     .where(and(eq(sessions.tokenHash, hashToken(token)), gt(sessions.expiresAt, new Date())))

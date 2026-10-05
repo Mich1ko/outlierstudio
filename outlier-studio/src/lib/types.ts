@@ -2,7 +2,7 @@
 import type { HookPattern } from '@/shared/catalog';
 import type { VideoPlatform } from '@/shared/video-url';
 
-export type SessionUser = { id: string; email: string; name: string; role: 'user' | 'admin'; plan: 'starter' | 'pro' | 'visionary' | 'titan' };
+export type SessionUser = { id: string; email: string; name: string; role: 'user' | 'admin' };
 export type TokenUsage = { inputTokens: number; outputTokens: number; totalTokens: number };
 
 export type Hook = { text: string; pattern: HookPattern; why: string };
@@ -53,8 +53,6 @@ type Totals = {
   estimatedCostUsd: number; unpricedRequests: number; avgLatencyMs: number;
 };
 export type Usage = {
-  plan: SessionUser['plan'];
-  credits: { used: number; limit: number; remaining: number; costPerAction: Record<string, number> };
   requestsPerMinute: number;
   periodStart: string;
   month: Totals;
@@ -76,7 +74,18 @@ export type TrackedChannel = {
   lastCheckedAt: string | null; lastError: string | null; trackedSince: string;
   subscribersGained: number | null; growthSince: string | null; uploadsLast7Days: number;
 };
-export type ChannelList = { items: TrackedChannel[]; configured: boolean; transcriptsConfigured: boolean; intervalHours: number; limit: number };
+export type ChannelList = {
+  items: TrackedChannel[];
+  /** True when at least one monitored platform has credentials. */
+  configured: boolean;
+  /** Per platform: whether its credentials are set on the server. */
+  platforms: Record<'youtube' | 'instagram', boolean>;
+  transcriptsConfigured: boolean;
+  /** Apify spend this calendar month, and the monthly limit (never above $5). */
+  apifyBudget: { spentUsd: number; budgetUsd: number };
+  intervalHours: number;
+  limit: number;
+};
 
 export type FeedVideo = {
   id: string; externalId: string; title: string; publishedAt: string; durationSeconds: number | null; isShort: boolean;
@@ -84,6 +93,8 @@ export type FeedVideo = {
   outlierMultiple: number | null; viewsPerHour: number | null; lastCheckedAt: string;
   channelId: string; channelTitle: string; channelHandle: string | null;
   platform: VideoPlatform; monitored: boolean; sourceUrl: string | null; hasTranscript: boolean;
+  /** Only on list results: whether you have broken this video down. */
+  analyzed?: boolean;
 };
 export type VideoCheck = { takenAt: string; viewCount: number | null; likeCount: number | null; commentCount: number | null };
 export type VideoDetail = {
@@ -94,10 +105,4 @@ export type VideoDetail = {
   transcriptsConfigured: boolean;
 };
 
-export type Limits = {
-  planMonthlyCredits: Record<SessionUser['plan'], number>;
-  requestsPerMinute: number;
-  trackedChannelsPerUser: number;
-  creditCosts: { hooks: number; script: number; analysis: number; report: number };
-};
-export type AdminUser = SessionUser & { createdAt: string; monthlyCreditsOverride: number | null; creditsUsedThisMonth: number };
+export type Limits = { requestsPerMinute: number; trackedChannelsPerUser: number };

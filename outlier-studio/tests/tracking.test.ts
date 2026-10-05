@@ -117,7 +117,7 @@ describe('tracking a competitor', () => {
     expect(youtube.calls.map((c) => c.resource)).toEqual(['channels', 'playlistItems', 'videos']);
 
     const mine = await myChannels(cookie);
-    expect(mine).toMatchObject({ configured: true, intervalHours: 6, limit: 25 });
+    expect(mine).toMatchObject({ configured: true, intervalHours: 6, limit: 200 });
     expect(mine.items).toHaveLength(1);
     expect(mine.items[0]).toMatchObject({ title: 'Run Faster', handle: '@runfaster', subscriberCount: 52000, medianShortViews: 10000, medianLongViews: 30000, uploadsLast7Days: 6, subscribersGained: 0, lastError: null });
 
@@ -129,6 +129,29 @@ describe('tracking a competitor', () => {
     expect(long.items[0].outlierMultiple).toBe(1.3);
     expect((await feed(cookie, '?days=7')).items.length).toBeLessThan(9);
     expect(JSON.stringify(shorts)).not.toContain('yt_test_key');
+  });
+
+  it('filters videos by keywords, ranges, engagement, age and analysis status', async () => {
+    const { cookie } = await newUser();
+    youtube.add(sampleChannel());
+    expect((await add(cookie, 'https://www.youtube.com/@runfaster')).status).toBe(201);
+    const titles = async (q: string) => (await feed(cookie, `?type=all&days=all&${q}`)).items.map((v: any) => v.title).sort();
+
+    expect(await titles('q=STRETCHING')).toEqual(['Why stretching before a run slows you down']);
+    expect(await titles('q=%25')).toEqual([]);
+    expect(await titles('minOutlier=2')).toEqual(['Why stretching before a run slows you down']);
+    expect(await titles('minViews=30000')).toEqual(['Full marathon training plan', 'Why stretching before a run slows you down']);
+    expect(await titles('minViews=15000&maxViews=30000')).toEqual(['Shoe review']);
+    // Likes plus comments over views: the stretching video is 6.3%, the long ones 4.1% and 3.3%.
+    expect(await titles('minEngagement=6')).toEqual(['Why stretching before a run slows you down']);
+    expect(await titles('maxEngagement=4.5')).toEqual(['Full marathon training plan', 'Shoe review']);
+    expect(await titles('withinDays=1')).toEqual([]);
+    expect(await titles('withinDays=2')).toContain('Why stretching before a run slows you down');
+    expect(await titles('status=analyzed')).toEqual([]);
+    const unanalyzed = (await feed(cookie, '?type=all&days=all&status=unanalyzed')).items;
+    expect(unanalyzed).toHaveLength(11);
+    expect(unanalyzed.every((v: any) => v.analyzed === false)).toBe(true);
+    expect((await feed(cookie, '?type=all&days=all&sort=engagement')).items[0].title).toBe('Why stretching before a run slows you down');
   });
 
   it('finds the channel from a video link and does not add it twice', async () => {

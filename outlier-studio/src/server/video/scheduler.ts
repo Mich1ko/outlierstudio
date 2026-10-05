@@ -1,7 +1,7 @@
 import 'server-only';
 import { env } from '../env';
 import { refreshDue } from './tracking';
-import { youtubeConfigured } from './youtube';
+import { MONITORED_PLATFORMS, platformConfigured } from './platforms';
 
 const TICK_MS = 10 * 60_000;
 const FIRST_TICK_MS = 20_000;
@@ -10,7 +10,7 @@ type State = { started?: boolean; running?: boolean };
 const state = ((globalThis as Record<string, unknown>).__trackingScheduler ??= {}) as State;
 
 async function tick(): Promise<void> {
-  if (state.running || !youtubeConfigured()) return;
+  if (state.running || !MONITORED_PLATFORMS.some(platformConfigured)) return;
   state.running = true;
   try {
     const result = await refreshDue(20);

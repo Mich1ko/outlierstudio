@@ -5,7 +5,7 @@ import { AddVideoForm } from '@/components/AddVideoForm';
 import { AnalysisView } from '@/components/GenerationViews';
 import { PlatformSelect } from '@/components/PlatformSelect';
 import { ErrorNotice, Field, PageHead, useReveal, Skeleton } from '@/components/ui';
-import { api, compact, refreshCredits, type ApiError } from '@/lib/api';
+import { api, compact, type ApiError } from '@/lib/api';
 import type { Generation } from '@/lib/types';
 
 type AnalysisGeneration = Extract<Generation, { kind: 'analysis' }>;
@@ -35,7 +35,6 @@ export default function AnalyzePage() {
       setError(err as ApiError);
     } finally {
       setBusy(false);
-      refreshCredits();
     }
   }
 
@@ -46,7 +45,7 @@ export default function AnalyzePage() {
 
       <div className="panel" style={{ maxWidth: 760, marginBottom: 28 }}>
         <AddVideoForm analyze label="Link to the video" button="Analyze this video" />
-        <p className="muted small" style={{ marginTop: 8 }}>Uses 1 credit. The video is also saved to your Videos list.</p>
+        <p className="muted small" style={{ marginTop: 8 }}>The video is also saved to your Videos list.</p>
       </div>
 
       <h2 style={{ marginBottom: 12 }}>No link? Paste a transcript</h2>

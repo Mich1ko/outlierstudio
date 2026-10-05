@@ -5,17 +5,17 @@
  *   npx tsx tests/support/serve-fake-groq.ts
  *   NODE_ENV=test GROQ_BASE_URL=http://127.0.0.1:4010 GROQ_API_KEY=test \
  *     YOUTUBE_API_BASE_URL=http://127.0.0.1:4011 YOUTUBE_API_KEY=test \
- *     SUPADATA_BASE_URL=http://127.0.0.1:4012 SUPADATA_API_KEY=test npx next start
+ *     APIFY_BASE_URL=http://127.0.0.1:4012 APIFY_TOKEN=apify_test_token npx next start
  *
  * It also serves a stand-in YouTube API on port 4011 with two made-up channels
- * (@runfaster and @kitchenshortcuts), and a stand-in Supadata on port 4012
+ * (@runfaster and @kitchenshortcuts), and a stand-in Apify on port 4012
  * that knows one TikTok and one Instagram video (links printed at start-up).
  *
  * Test tooling only. The app ignores both base URLs unless NODE_ENV is "test".
  */
 import http from 'node:http';
 import { FakeGroq } from './fake-groq';
-import { FakeSupadata } from './fake-supadata';
+import { FakeApify } from './fake-apify';
 import { FakeYouTube, sampleChannel } from './fake-youtube';
 
 const SCRIPT = `HOOK
@@ -111,10 +111,10 @@ const TRANSCRIPT =
   'Most people stretch before they run and it is making them slower. Here is what the research actually says, and the two minute warm up I use instead before every single run. First, leg swings. Then high knees. Then ten easy strides.';
 const TIKTOK = 'https://www.tiktok.com/@chefmaya/video/7301234567890123456';
 const REEL = 'https://www.instagram.com/reel/CxYz123abcd/';
-const supadata = new FakeSupadata();
-supadata.defaultTranscript = TRANSCRIPT;
+const apify = new FakeApify();
+apify.defaultTranscript = TRANSCRIPT;
 // One video without a transcript, to exercise the paste-it-in path.
-supadata.transcripts.set('https://www.youtube.com/shorts/a0000000003', null);
-supadata.posts.set(TIKTOK, { platform: 'tiktok', id: '7301234567890123456', username: 'chefmaya', displayName: 'Chef Maya', title: 'Stop rinsing your rice like this', views: 480000, likes: 31000, comments: 900, duration: 34 });
-supadata.posts.set(REEL, { platform: 'instagram', id: 'CxYz123abcd', username: 'trailnotes', displayName: 'Trail Notes', title: 'The downhill mistake that wrecks your knees', views: 212000, likes: 14000, comments: 310, duration: 41 });
-void supadata.start(Number(process.env.FAKE_SUPADATA_PORT ?? 4012)).then((url) => console.log(`Stand-in Supadata listening on ${url}\n  TikTok: ${TIKTOK}\n  Instagram: ${REEL}`));
+apify.transcripts.set('https://www.youtube.com/shorts/a0000000003', null);
+apify.posts.set(TIKTOK, { platform: 'tiktok', id: '7301234567890123456', username: 'chefmaya', displayName: 'Chef Maya', title: 'Stop rinsing your rice like this', views: 480000, likes: 31000, comments: 900, duration: 34 });
+apify.posts.set(REEL, { platform: 'instagram', id: 'CxYz123abcd', username: 'trailnotes', displayName: 'Trail Notes', title: 'The downhill mistake that wrecks your knees', views: 212000, likes: 14000, comments: 310, duration: 41 });
+void apify.start(Number(process.env.FAKE_APIFY_PORT ?? 4012)).then((url) => console.log(`Stand-in Apify listening on ${url}\n  TikTok: ${TIKTOK}\n  Instagram: ${REEL}`));

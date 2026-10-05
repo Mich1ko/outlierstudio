@@ -4,7 +4,6 @@ import { PersonaForm } from '@/components/PersonaForm';
 import { SignOutButton } from '@/components/SignOutButton';
 import { PageHead } from '@/components/ui';
 import { currentUser } from '@/server/auth/current';
-import { PLAN_LABELS } from '@/shared/catalog';
 
 export const metadata = { title: 'Settings' };
 
@@ -25,10 +24,6 @@ export default async function SettingsPage() {
           <div>
             <dt className="muted small">Email</dt>
             <dd style={{ margin: 0, overflowWrap: 'anywhere' }}>{user.email}</dd>
-          </div>
-          <div>
-            <dt className="muted small">Plan</dt>
-            <dd style={{ margin: 0 }}>{PLAN_LABELS[user.plan]}. Plans are changed by an administrator.</dd>
           </div>
         </dl>
         <div className="row">

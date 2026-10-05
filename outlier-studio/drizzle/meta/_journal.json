@@ -22,6 +22,13 @@
       "when": 1791129978007,
       "tag": "0002_brown_mimic",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1791218867248,
+      "tag": "0003_tired_wong",
+      "breakpoints": true
     }
   ]
 }

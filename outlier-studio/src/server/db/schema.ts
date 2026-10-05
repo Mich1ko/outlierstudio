@@ -182,6 +182,24 @@ export const aiRequests = pgTable(
   (t) => [index('ai_requests_user_created_idx').on(t.userId, t.createdAt)],
 );
 
+/**
+ * One row per Apify run. reservedUsd is the most the run may cost (the cap sent
+ * to Apify); costUsd is what it did cost, or null when unknown, in which case the
+ * reservation counts. Failed runs keep their reservation, so the budget errs low.
+ */
+export const apifyRuns = pgTable(
+  'apify_runs',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    actor: text('actor').notNull(),
+    reservedUsd: doublePrecision('reserved_usd').notNull(),
+    costUsd: doublePrecision('cost_usd'),
+    status: text('status', { enum: ['pending', 'succeeded', 'failed'] }).notNull().default('pending'),
+    createdAt: ts('created_at').notNull().defaultNow(),
+  },
+  (t) => [index('apify_runs_created_idx').on(t.createdAt)],
+);
+
 /** Admin-editable configuration, e.g. key "limits". */
 export const appSettings = pgTable('app_settings', {
   key: text('key').primaryKey(),

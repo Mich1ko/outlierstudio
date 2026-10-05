@@ -60,10 +60,10 @@ describe('the Groq key stays on the server', () => {
     expect(files.filter((f) => /timedtext|youtubei\/v1|get_video_info/.test(read(f))).map(rel)).toEqual([]);
   });
 
-  it('keeps the Supadata key on the server and pins its address', () => {
-    const readers = files.filter((f) => /env\(\)\.SUPADATA_API_KEY|process\.env\.SUPADATA_API_KEY|SUPADATA_API_KEY: z\./.test(read(f))).map(rel).sort();
-    expect(readers).toEqual(['src/server/env.ts', 'src/server/video/supadata.ts']);
-    expect(read(path.join(root, 'src/server/video/supadata.ts'))).toContain("'https://api.supadata.ai/v1'");
+  it('keeps the Apify token on the server and pins its address', () => {
+    const readers = files.filter((f) => /env\(\)\.APIFY_TOKEN|process\.env\.APIFY_TOKEN|APIFY_TOKEN: z\./.test(read(f))).map(rel).sort();
+    expect(readers).toEqual(['src/server/env.ts', 'src/server/video/apify.ts']);
+    expect(read(path.join(root, 'src/server/video/apify.ts'))).toContain("'https://api.apify.com'");
   });
 
   it('has no client component importing server code', () => {

@@ -5,11 +5,12 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { Picture } from '@/components/Picture';
 import { ErrorNotice, Field, PageHead, Skeleton } from '@/components/ui';
-import { api, refreshCredits, type ApiError } from '@/lib/api';
+import { api, type ApiError } from '@/lib/api';
 import { ago, compact, day, num, signed } from '@/lib/format';
 import type { ChannelList, Generation, TrackedChannel } from '@/lib/types';
 import { PLATFORM_NAME } from '@/shared/video-url';
-import { authorUrl, parseYouTubeInput } from '@/shared/youtube-url';
+import { parseChannelInput } from '@/shared/channel-url';
+import { authorUrl } from '@/shared/youtube-url';
 
 type Action = 'check' | 'remove' | 'report' | 'own';
 
@@ -30,7 +31,6 @@ function ChannelRow({ channel, onChanged }: { channel: TrackedChannel; onChanged
       if (kind === 'own') await api(`/api/channels/${channel.id}`, { method: 'PUT', body: { isOwn: !channel.isOwn } });
       if (kind === 'report') {
         const { generation } = await api<{ generation: Generation }>('/api/ai/report', { body: { channelId: channel.id } });
-        refreshCredits();
         router.push(`/app/library/${generation.id}`);
         return;
       }
@@ -38,8 +38,7 @@ function ChannelRow({ channel, onChanged }: { channel: TrackedChannel; onChanged
     } catch (err) {
       setError(err as ApiError);
       if (kind === 'check') onChanged();
-      if (kind === 'report') refreshCredits();
-    } finally {
+          } finally {
       setBusy(null);
       setConfirming(false);
     }
@@ -183,9 +182,9 @@ export default function WatchlistPage() {
     e.preventDefault();
     setAddError(null);
     setNote('');
-    const parsed = parseYouTubeInput(url);
+    const parsed = parseChannelInput(url);
     if (!parsed.ok) {
-      setLinkError(/tiktok|instagram/i.test(url) ? 'TikTok and Instagram accounts cannot be monitored. Add their videos one at a time on the Videos page.' : parsed.reason);
+      setLinkError(/tiktok/i.test(url) ? 'TikTok accounts cannot be monitored. Add their videos one at a time on the Videos page.' : parsed.reason);
       return;
     }
     setLinkError(undefined);
@@ -211,18 +210,18 @@ export default function WatchlistPage() {
   return (
     <div className="stack-lg" style={{ maxWidth: 1100 }}>
       <PageHead title="Watchlist">
-        The YouTube channels you compete with. Each one is checked{data ? ` every ${data.intervalHours} hours` : ' on a schedule'} for new uploads, views and subscribers.
+        The YouTube and Instagram accounts you compete with. Each one is checked{data ? ` every ${data.intervalHours} hours` : ' on a schedule'} for new uploads, views and subscribers.
       </PageHead>
 
       {data && !data.configured && (
         <div className="notice notice-error" role="alert">
-          <strong>Tracking is not set up yet.</strong> The server needs a YouTube API key. Add <code>YOUTUBE_API_KEY</code> to the <code>.env</code> file and restart the app. The README has the steps to get a free key.
+          <strong>Tracking is not set up yet.</strong> The server needs a YouTube API key (<code>YOUTUBE_API_KEY</code>) or an Apify token (<code>APIFY_TOKEN</code>). Add them to the <code>.env</code> file and restart the app. The README has the steps.
         </div>
       )}
 
       <form className="panel stack" onSubmit={add} noValidate>
         <div className="add-row">
-          <Field label="YouTube channel or video link" hint="A channel page, an @handle, or any video or Short from the channel." error={linkError}>
+          <Field label="Channel or video link" hint="A YouTube channel, @handle or video, or an Instagram profile (instagram.com/name)." error={linkError}>
             {(p) => (
               <input
                 {...p}
@@ -232,7 +231,7 @@ export default function WatchlistPage() {
                   setUrl(e.target.value);
                   setLinkError(undefined);
                 }}
-                placeholder="https://www.youtube.com/@channel"
+                placeholder="https://www.youtube.com/@channel or instagram.com/name"
                 maxLength={300}
               />
             )}
@@ -252,17 +251,17 @@ export default function WatchlistPage() {
       {data && items.length === 0 && (
         <div className="empty">
           <h2>Your watchlist is empty</h2>
-          <p className="muted">Paste a YouTube channel or video link above. Views are available straight away; growth and momentum build up from the first check onward.</p>
+          <p className="muted">Paste a YouTube or Instagram link above. Views are available straight away; growth and momentum build up from the first check onward.</p>
         </div>
       )}
 
       <Group title="Your channels" note="Your own channels are left out of the competitor list on the Videos page." channels={mine} onChanged={load} />
       <Group title={data ? `Competitors (${monitoredCount} of ${data.limit} channels used)` : 'Competitors'} channels={competitors} onChanged={load} />
-      <Group title="From pasted links" note="TikTok and Instagram accounts whose videos you added one at a time. These are not checked automatically." channels={byLink} onChanged={load} />
+      <Group title="From pasted links" note="TikTok accounts whose videos you added one at a time, and single Instagram reels. These are not checked automatically." channels={byLink} onChanged={load} />
 
       {monitoredCount > 0 && (
         <p className="muted small">
-          Checks run while the app is running. YouTube rounds subscriber counts, so small changes may not show. A video of 3 minutes or less is counted as a Short. A report uses 1 credit.
+          Checks run while the app is running. YouTube rounds subscriber counts, so small changes may not show. A video of 3 minutes or less is counted as a Short.
         </p>
       )}
     </div>
