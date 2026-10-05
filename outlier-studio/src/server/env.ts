@@ -1,0 +1,52 @@
+import 'server-only';
+import { z } from 'zod';
+
+const schema = z.object({
+  NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+  APP_URL: z.string().url().default('http://localhost:3000'),
+  DATABASE_URL: z.string().optional(),
+  PGLITE_DIR: z.string().default('./.data/pglite'),
+  GROQ_API_KEY: z.string().optional(),
+  GROQ_MODEL_QUALITY: z.string().min(1).default('openai/gpt-oss-120b'),
+  GROQ_MODEL_FAST: z.string().min(1).default('openai/gpt-oss-20b'),
+  GROQ_MODEL_TRANSCRIBE: z.string().min(1).default('whisper-large-v3-turbo'),
+  GROQ_STRICT_JSON_MODELS: z.string().default('openai/gpt-oss-120b,openai/gpt-oss-20b,qwen/qwen3.8-27b'),
+  GROQ_TIMEOUT_MS: z.coerce.number().int().min(1000).max(300_000).default(60_000),
+  GROQ_MAX_RETRIES: z.coerce.number().int().min(0).max(5).default(2),
+  GROQ_PRICING_JSON: z.string().optional(),
+  /** Only set this for reasoning models; other models reject the parameter. */
+  GROQ_REASONING_EFFORT: z.enum(['low', 'medium', 'high']).optional(),
+  /** Google API key with the YouTube Data API v3 enabled. Needed for competitor tracking. */
+  YOUTUBE_API_KEY: z.string().optional(),
+  /** Supadata key: automatic transcripts, and numbers for TikTok and Instagram videos. */
+  SUPADATA_API_KEY: z.string().optional(),
+  /** Honoured only when NODE_ENV === 'test' (see video/supadata.ts). */
+  SUPADATA_BASE_URL: z.string().optional(),
+  /** How often each tracked channel is re-checked. */
+  TRACK_INTERVAL_HOURS: z.coerce.number().min(1).max(168).default(6),
+  /** Set to 1 to stop the built-in background checker (for hosts that call /api/cron/refresh instead). */
+  DISABLE_SCHEDULER: z.string().optional(),
+  /** Bearer token for POST /api/cron/refresh. The endpoint is off when unset. */
+  CRON_SECRET: z.string().min(16).optional(),
+  /** Honoured only when NODE_ENV === 'test' (see video/youtube.ts). */
+  YOUTUBE_API_BASE_URL: z.string().optional(),
+  /** Honoured only when NODE_ENV === 'test' (see ai/client.ts). */
+  GROQ_BASE_URL: z.string().optional(),
+});
+
+export type Env = z.infer<typeof schema>;
+
+/** Read on every call so tests can change process.env between cases. */
+export function env(): Env {
+  const cleaned: Record<string, string | undefined> = {};
+  for (const key of Object.keys(schema.shape)) {
+    const value = process.env[key];
+    cleaned[key] = value === '' ? undefined : value;
+  }
+  const parsed = schema.safeParse(cleaned);
+  if (!parsed.success) {
+    const issues = parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ');
+    throw new Error(`Invalid environment configuration: ${issues}`);
+  }
+  return parsed.data;
+}
