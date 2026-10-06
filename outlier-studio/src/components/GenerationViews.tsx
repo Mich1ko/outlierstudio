@@ -6,6 +6,8 @@ import { compact } from '@/lib/format';
 import type { Analysis, Hook, Report } from '@/lib/types';
 import { HOOK_PATTERN_LABELS } from '@/shared/catalog';
 import { CopyButton } from './ui';
+import { BreakdownTabs } from './BreakdownTabs';
+import { HookCallout } from './HookCallout';
 
 const scriptLink = (params: Record<string, string>) => `/app/scripts?${new URLSearchParams(params)}`;
 
@@ -62,23 +64,20 @@ export function AnalysisView({ analysis, transcript, title, hideMultiple }: { an
   }
 
   return (
-    <div className="panel analysis">
-      <div className="row">
-        <button type="button" className="btn btn-primary" onClick={() => router.push(scriptLink({ idea: title ?? analysis.summary, ...carry() }))}>
-          Write a script like this
-        </button>
-        <button type="button" className="btn" onClick={() => router.push(`/app/hooks?${new URLSearchParams({ topic: title ?? analysis.summary, ...carry() })}`)}>
-          Write hooks like this
-        </button>
-      </div>
-      <section>
+    <div className="panel analysis bg-surface text-text border-border">
+      <BreakdownTabs
+        onScript={() => router.push(scriptLink({ idea: title ?? analysis.summary, ...carry() }))}
+        onHooks={() => router.push(`/app/hooks?${new URLSearchParams({ topic: title ?? analysis.summary, ...carry() })}`)}
+      />
+      <section className="analysis-overview">
+        <p className="eyebrow text-muted">At a glance</p>
         {analysis.outlierMultiple !== null && !hideMultiple && (
           <p className="multiple">
             <b>{analysis.outlierMultiple}x</b>
             <span className="muted">this channel&apos;s median views</span>
           </p>
         )}
-        <p>{analysis.summary}</p>
+        <p className="analysis-summary">{analysis.summary}</p>
         <div className="row">
           <span className="tag">{analysis.format}</span>
           {analysis.topics.map((t) => (
@@ -89,13 +88,7 @@ export function AnalysisView({ analysis, transcript, title, hideMultiple }: { an
         </div>
       </section>
 
-      <section>
-        <h2>The hook</h2>
-        <p className="quote">{analysis.hook.text}</p>
-        <p>
-          <strong>{analysis.hook.pattern}.</strong> {analysis.hook.whyItWorks}
-        </p>
-      </section>
+      <HookCallout hook={analysis.hook} />
 
       {analysis.structure.length > 0 && (
         <section>

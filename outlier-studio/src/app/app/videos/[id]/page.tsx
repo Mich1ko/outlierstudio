@@ -4,14 +4,14 @@ import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import { Suspense, useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { AnalysisView } from '@/components/GenerationViews';
-import { Picture } from '@/components/Picture';
+import { VideoHeader } from '@/components/VideoHeader';
+import { MetricsRow } from '@/components/MetricsRow';
 import { ErrorNotice, Field, Skeleton, useReveal } from '@/components/ui';
 import { ViewsChart } from '@/components/ViewsChart';
 import { api, type ApiError } from '@/lib/api';
-import { ago, compact, day, duration, num, when } from '@/lib/format';
+import { ago, day, num, when } from '@/lib/format';
 import type { Generation, VideoDetail } from '@/lib/types';
 import { PLATFORM_NAME } from '@/shared/video-url';
-import { watchUrl } from '@/shared/youtube-url';
 
 type AnalysisGeneration = Extract<Generation, { kind: 'analysis' }>;
 
@@ -114,7 +114,6 @@ function VideoScreen() {
 
   const { video, history, analyses } = data;
   const platform = PLATFORM_NAME[video.platform];
-  const kind = video.isShort ? 'short videos' : 'longer videos';
   const earlier = analyses.filter((a) => a.id !== analysis?.id);
   const submitPasted = (e: FormEvent) => {
     e.preventDefault();
@@ -122,68 +121,19 @@ function VideoScreen() {
   };
 
   return (
-    <div className="stack-lg" style={{ maxWidth: 1000 }}>
-      <header className="stack">
-        <Link href="/app/feed" className="small">
-          Back to Videos
-        </Link>
-        <div className="video-head">
-          <Picture className="thumb" src={video.thumbnailUrl} lazy={false} />
-          <div className="stack">
-            <h1 style={{ overflowWrap: 'anywhere' }}>{video.title}</h1>
-            <p className="muted">
-              <span className="tag">{platform}</span> {video.channelTitle}, published {day(video.publishedAt)} ({ago(video.publishedAt)})
-              {video.durationSeconds !== null && video.durationSeconds > 0 && `, ${duration(video.durationSeconds)} long`}
-            </p>
-            <div className="row">
-              <a className="btn btn-sm" href={watchUrl(video)} target="_blank" rel="noreferrer">
-                Watch on {platform}
-              </a>
-              <Link className="btn btn-sm" href={`/app/feed?channel=${video.channelId}&days=all`}>
-                More from {video.channelTitle}
-              </Link>
-              {!video.monitored && (
-                <button type="button" className="btn btn-sm" onClick={updateNumbers} disabled={updating}>
-                  {updating ? 'Updating numbers' : 'Update numbers'}
-                </button>
-              )}
-            </div>
-            <ErrorNotice error={updateError} />
-          </div>
-        </div>
-      </header>
-
-      <section className="tiles" aria-label="Current numbers">
-        <div className="tile">
-          <b>{video.outlierMultiple === null ? 'No baseline' : `${video.outlierMultiple}x`}</b>
-          <span>
-            {video.outlierMultiple === null
-              ? video.monitored
-                ? `the channel's normal for ${kind}`
-                : 'needs five videos from this account'
-              : `the channel's normal of ${compact(video.channelMedianViews ?? 0)} for ${kind}`}
-          </span>
-        </div>
-        <div className="tile">
-          <b>{video.viewCount === null ? 'Hidden' : num(video.viewCount)}</b>
-          <span>Views, checked {ago(video.lastCheckedAt)}</span>
-        </div>
-        <div className="tile">
-          <b>{video.viewsPerHour === null ? 'Not yet' : `+${num(Math.round(video.viewsPerHour))}`}</b>
-          <span>{video.viewsPerHour === null ? 'Views per hour, after the next check' : 'Views per hour, between the last two checks'}</span>
-        </div>
-        <div className="tile">
-          <b>{video.likeCount === null ? 'Hidden' : compact(video.likeCount)}</b>
-          <span>Likes</span>
-        </div>
-        <div className="tile">
-          <b>{video.commentCount === null ? 'Off' : compact(video.commentCount)}</b>
-          <span>Comments</span>
-        </div>
-      </section>
+    <div className="video-detail stack-lg">
+      <VideoHeader video={video}>
+        {!video.monitored && (
+          <button type="button" className="btn btn-sm" onClick={updateNumbers} disabled={updating}>
+            {updating ? 'Updating numbers' : 'Update numbers'}
+          </button>
+        )}
+      </VideoHeader>
+      <ErrorNotice error={updateError} />
+      <MetricsRow video={video} />
 
       <section className="stack" ref={resultRef} style={{ scrollMarginTop: 72 }} aria-busy={busy}>
-        <h2>Breakdown</h2>
+        <div className="section-heading"><h2>Breakdown</h2><span className="eyebrow text-muted">From insight to your next idea</span></div>
         {busy ? (
           <div className="panel stack">
             <p role="status">

@@ -1,6 +1,15 @@
 const base = { viewBox: '0 0 20 20', fill: 'none', stroke: 'currentColor', strokeWidth: 1.7, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true } as const;
 
 export const Icon = {
+  sun: () => <svg {...base}><circle cx="10" cy="10" r="3.5" /><path d="M10 1v2M10 17v2M1 10h2M17 10h2M3.6 3.6 5 5M15 15l1.4 1.4M3.6 16.4 5 15M15 5l1.4-1.4" /></svg>,
+  moon: () => <svg {...base}><path d="M17 12.2A7.2 7.2 0 0 1 7.8 3a7.2 7.2 0 1 0 9.2 9.2Z" /></svg>,
+  monitor: () => <svg {...base}><rect x="2" y="3" width="16" height="11" rx="2" /><path d="M10 14v3M6 17h8" /></svg>,
+  arrowLeft: () => <svg {...base}><path d="m9 4-6 6 6 6M3 10h14" /></svg>,
+  external: () => <svg {...base}><path d="M11 3h6v6M17 3l-8 8M7 3H3v14h14v-4" /></svg>,
+  play: () => <svg {...base}><path d="m7 4 9 6-9 6Z" /></svg>,
+  info: () => <svg {...base}><circle cx="10" cy="10" r="7.5" /><path d="M10 9v5M10 6v.1" /></svg>,
+  menu: () => <svg {...base}><path d="M3 5h14M3 10h14M3 15h14" /></svg>,
+  close: () => <svg {...base}><path d="m4 4 12 12M16 4 4 16" /></svg>,
   search: () => (
     <svg {...base}>
       <circle cx="9" cy="9" r="5.5" />
