@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { LogoMark } from '@/components/LogoMark';
 import { currentUser } from '@/server/auth/current';
 import './auth.css';
 
@@ -11,7 +12,7 @@ export default async function AuthLayout({ children }: { children: ReactNode }) 
     <div className="auth-experience">
       <header className="auth-header">
         <Link href="/" className="auth-brand" aria-label="Outlier Studio home">
-          <span className="auth-brand-symbol" aria-hidden="true"><i /><i /><i /></span>
+          <LogoMark />
           outlier<span>studio</span><b>.</b>
         </Link>
         <div className="auth-header-actions"><Link href="/">Back to home <span aria-hidden="true">↗</span></Link><ThemeToggle /></div>

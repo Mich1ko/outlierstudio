@@ -16,12 +16,9 @@
 }
 .auth-header { position: absolute; inset: 0 0 auto; z-index: 2; display: flex; justify-content: space-between; align-items: center; gap: 20px; padding: 28px 40px; }
 .auth-brand { display: inline-flex; align-items: center; color: var(--color-paper); text-decoration: none; font: 750 25px var(--display); letter-spacing: -1px; }
-.auth-brand > span:not(.auth-brand-symbol) { font-weight: 400; }
+.auth-brand > span:not(.logo-mark) { font-weight: 400; }
 .auth-brand b { color: var(--color-lime-accent); }
-.auth-brand-symbol { display: flex; align-items: end; gap: 3px; margin-right: 12px; transform: skew(-12deg); }
-.auth-brand-symbol i { width: 5px; height: 11px; background: var(--color-paper); }
-.auth-brand-symbol i:nth-child(2) { height: 17px; }
-.auth-brand-symbol i:nth-child(3) { height: 24px; background: var(--color-lime-accent); }
+.auth-brand .logo-mark { width: 32px; height: 32px; margin-right: 12px; }
 .auth-header-actions { display: flex; align-items: center; gap: 22px; }
 .auth-header-actions > a { color: var(--auth-muted); font-size: 12px; text-decoration: none; }
 .auth-header-actions > a span { margin-left: 10px; }
@@ -105,7 +102,6 @@
   .auth-experience { grid-template-columns: 1fr; }
   .auth-header { position: relative; padding: 20px 24px; }
   .auth-brand { color: var(--text); font-size: 23px; }
-  .auth-brand-symbol i:not(:last-child) { background: var(--text); }
   .auth-header-actions { gap: 10px; }
   .auth-header-actions > a { font-size: 11px; }
   .auth-header-actions > a span { display: none; }

@@ -6,6 +6,7 @@ import { APP } from '@/config/app';
 import { api } from '@/lib/api';
 import type { SessionUser } from '@/lib/types';
 import { Icon } from './icons';
+import { LogoMark } from './LogoMark';
 import { ThemeToggle } from './ThemeToggle';
 
 const NAV = [
@@ -45,7 +46,7 @@ export function Sidebar({ user, onNavigate }: { user: SessionUser; onNavigate?: 
   }
   return (
     <aside className="sidebar bg-sidebar text-sidebar-text">
-      <Link href="/app" className="brand" onClick={onNavigate}><span className="brand-mark" aria-hidden="true" />{APP.name}</Link>
+      <Link href="/app" className="brand" onClick={onNavigate}><LogoMark />{APP.name}</Link>
       <nav aria-label="Main" className="nav">
         {NAV.map(({ group, items }) => (
           <div key={group} className="nav-section">

@@ -94,32 +94,16 @@
   letter-spacing: -1px;
   white-space: nowrap;
 }
-.lp-brand > span:not(.lp-mark) {
+.lp-brand > span:not(.logo-mark) {
   font-weight: 400;
 }
 .lp-brand > b {
   color: var(--color-lime-accent);
 }
-.lp-mark {
-  display: flex;
-  align-items: end;
-  gap: 3px;
-  height: 22px;
+.lp-brand .logo-mark {
+  width: 31px;
+  height: 31px;
   margin-right: 8px;
-  transform: skew(-12deg);
-}
-.lp-mark i {
-  display: block;
-  width: 5px;
-  height: 11px;
-  background: var(--text);
-}
-.lp-mark i:nth-child(2) {
-  height: 16px;
-}
-.lp-mark i:nth-child(3) {
-  height: 23px;
-  background: var(--color-lime-accent);
 }
 .lp-nav nav,
 .lp-nav-actions {
@@ -1485,7 +1469,7 @@
   .lp-theme {
     width: 44px;
   }
-  .lp-mark {
+  .lp-brand .logo-mark {
     margin-right: 4px;
   }
   .lp-container {

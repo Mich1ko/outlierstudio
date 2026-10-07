@@ -5,6 +5,7 @@ import { useRef, useState, type ReactNode } from 'react';
 import { APP } from '@/config/app';
 import type { SessionUser } from '@/lib/types';
 import { Icon } from './icons';
+import { LogoMark } from './LogoMark';
 import { Sidebar } from './Sidebar';
 import { ThemeToggle } from './ThemeToggle';
 import { CommandPalette } from './CommandPalette';
@@ -19,7 +20,7 @@ export function AppShell({ user, children }: { user: SessionUser; children: Reac
       <div className="desktop-sidebar"><Sidebar user={user} /></div>
       <div className="shell-content">
         <div className="topbar">
-          <Link href="/app" className="brand"><span className="brand-mark" aria-hidden="true" /><span>{APP.name}</span></Link>
+          <Link href="/app" className="brand"><LogoMark /><span>{APP.name}</span></Link>
           <div className="topbar-controls">
             <ThemeToggle compact />
             <button className="icon-button" type="button" aria-label="Open navigation" aria-expanded={open} aria-controls="mobile-navigation" onClick={() => { drawer.current?.showModal(); setOpen(true); }}><Icon.menu /></button>

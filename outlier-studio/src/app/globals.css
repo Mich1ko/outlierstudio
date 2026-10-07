@@ -1735,24 +1735,11 @@
     text-decoration: none;
   }
 
-  .brand-mark {
-    display: inline-block;
+  .logo-mark {
+    display: block;
     width: 28px;
     height: 28px;
-    border-radius: 8px;
-    background: var(--sidebar-hover);
-    border: 1px solid var(--sidebar-border);
-    position: relative;
     flex: none;
-  }
-
-  .brand-mark::after {
-    content: '';
-    position: absolute;
-    left: 10px;
-    top: 8px;
-    border: 5px solid transparent;
-    border-left: 7px solid var(--sidebar-text);
   }
 
   .brand:hover {
@@ -2722,14 +2709,9 @@
       font-size: 12px;
     }
 
-    .topbar .brand-mark {
+    .topbar .logo-mark {
       width: 24px;
       height: 24px;
-    }
-
-    .topbar .brand-mark::after {
-      left: 8px;
-      top: 6px;
     }
 
     .topbar-controls {

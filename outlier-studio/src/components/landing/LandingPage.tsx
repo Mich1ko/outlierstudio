@@ -18,6 +18,7 @@ import {
 } from "motion/react";
 import { useTheme } from "@/components/ThemeProvider";
 import { Icon } from "@/components/icons";
+import { LogoMark } from "@/components/LogoMark";
 import { clock, parseScript } from "@/shared/script";
 import "./landing.css";
 
@@ -54,11 +55,7 @@ const steps = [
 function Brand() {
   return (
     <Link href="/" className="lp-brand" aria-label="Outlier Studio home">
-      <span className="lp-mark" aria-hidden="true">
-        <i />
-        <i />
-        <i />
-      </span>
+      <LogoMark />
       outlier<span>studio</span>
       <b>.</b>
     </Link>
