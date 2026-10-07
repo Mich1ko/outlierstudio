@@ -39,7 +39,7 @@ type Filters = {
 
 const DEFAULTS: Filters = {
   channel: '', q: '', minOutlier: '', maxOutlier: '', minViews: '', maxViews: '', minEngagement: '', maxEngagement: '',
-  within: '1', unit: 'months', platform: '', type: 'all', analyzed: true, unanalyzed: true, sort: 'outlier',
+  within: '', unit: 'months', platform: '', type: 'all', analyzed: true, unanalyzed: true, sort: 'outlier',
 };
 const SAVED_KEY = 'videos.savedFilter';
 
@@ -85,9 +85,11 @@ const TrendIcon = () => (<svg {...svg}><path d="M2 11l4-4 3 3 5-6" /><path d="M1
 const EyeIcon = () => (<svg {...svg}><path d="M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z" /><circle cx="8" cy="8" r="2" /></svg>);
 const SparkIcon = () => (<svg {...svg}><path d="M8 1.5v3M8 11.5v3M1.5 8h3M11.5 8h3M3.5 3.5l2 2M10.5 10.5l2 2M12.5 3.5l-2 2M5.5 10.5l-2 2" /></svg>);
 
+const isPortraitVideo = (video: FeedVideo) => video.isShort || video.platform !== 'youtube';
+
 function VideoCard({ video }: { video: FeedVideo }) {
   const eng = engagementRate(video);
-  const portrait = video.isShort || video.platform !== 'youtube';
+  const portrait = isPortraitVideo(video);
   return (
     <Link className="vcard" href={`/app/videos/${video.id}`} data-short={portrait}>
       <span className="vcard-media">
@@ -109,6 +111,21 @@ function VideoCard({ video }: { video: FeedVideo }) {
         {eng !== null && <span title="Likes and comments per view"><SparkIcon />{eng}% engagement</span>}
       </span>
     </Link>
+  );
+}
+
+function VideoGroup({ title, orientation, videos }: { title: string; orientation: 'horizontal' | 'vertical'; videos: FeedVideo[] }) {
+  if (videos.length === 0) return null;
+  return (
+    <section className="video-orientation-group" aria-label={`${title} videos`}>
+      <div className="video-orientation-head">
+        <h2>{title}</h2>
+        <span>{videos.length}</span>
+      </div>
+      <div className="vgrid" data-orientation={orientation}>
+        {videos.map((video) => <VideoCard key={video.id} video={video} />)}
+      </div>
+    </section>
   );
 }
 
@@ -253,6 +270,8 @@ function Feed() {
   const noChannels = channels !== null && channels.items.length === 0;
 
   const topOutlier = videos?.reduce<number | null>((best, video) => video.outlierMultiple === null ? best : Math.max(best ?? 0, video.outlierMultiple), null) ?? null;
+  const horizontalVideos = videos?.filter((video) => !isPortraitVideo(video)) ?? [];
+  const verticalVideos = videos?.filter(isPortraitVideo) ?? [];
   return (
     <div className="feed-page stack-lg">
       <PageHead title="Videos" action={<details className="menu"><summary className="btn btn-primary">Add video</summary><div className="menu-items add-video-popover"><AddVideoForm /></div></details>}>
@@ -315,10 +334,9 @@ function Feed() {
             </div>
           )}
           {videos && videos.length > 0 && (
-            <div className="vgrid" style={{ opacity: loading ? 0.55 : 1 }}>
-              {videos.map((v) => (
-                <VideoCard key={v.id} video={v} />
-              ))}
+            <div className="video-orientation-groups" style={{ opacity: loading ? 0.55 : 1 }}>
+              <VideoGroup title="Long form" orientation="horizontal" videos={horizontalVideos} />
+              <VideoGroup title="Short form" orientation="vertical" videos={verticalVideos} />
             </div>
           )}
           {videos && videos.length > 0 && (

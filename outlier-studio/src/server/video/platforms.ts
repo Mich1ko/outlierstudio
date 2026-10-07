@@ -47,6 +47,7 @@ export async function fetchSnapshot(
   platform: MonitoredPlatform,
   externalId: string,
   known?: ChannelInfo,
+  knownVideoCount = 0,
 ): Promise<{ info: ChannelInfo; videos: VideoInfo[] } | null> {
   if (platform === 'instagram') {
     const items = await instagramItemsFor(externalId);
@@ -55,6 +56,11 @@ export async function fetchSnapshot(
   }
   const info = known ?? (await fetchChannel({ kind: 'channelId', id: externalId }));
   if (!info) return null;
-  const ids = info.uploadsPlaylistId ? await fetchRecentVideoIds(info.uploadsPlaylistId) : [];
+  // A newly tracked or previously partial channel gets a one-time full backfill.
+  // Once its public history is present, scheduled checks only re-read the latest
+  // 50 videos. A newly published upload makes videoCount grow and triggers one
+  // more backfill, so gaps cannot accumulate over time.
+  const historyIsComplete = info.videoCount !== null && knownVideoCount >= info.videoCount;
+  const ids = info.uploadsPlaylistId ? await fetchRecentVideoIds(info.uploadsPlaylistId, historyIsComplete ? 50 : Infinity) : [];
   return { info, videos: await fetchVideos(ids) };
 }

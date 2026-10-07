@@ -131,6 +131,29 @@ describe('tracking a competitor', () => {
     expect(JSON.stringify(shorts)).not.toContain('yt_test_key');
   });
 
+  it('backfills a channel whose upload history is longer than one YouTube page', async () => {
+    const { cookie } = await newUser();
+    const channel = sampleChannel();
+    for (let index = 0; index < 65; index++) {
+      channel.videos.push({
+        id: `history${String(index).padStart(4, '0')}`,
+        title: `Archive video ${index + 1}`,
+        publishedAt: new Date(Date.now() - (500 + index) * 3_600_000).toISOString(),
+        duration: 'PT6M',
+        views: 1_000 + index,
+      });
+    }
+    youtube.add(channel);
+
+    expect((await add(cookie, 'https://www.youtube.com/@runfaster')).status).toBe(201);
+    const first = await feed(cookie, '?type=all&days=all&limit=60');
+    const second = await feed(cookie, `?type=all&days=all&limit=60&offset=${first.nextOffset}`);
+
+    expect([...first.items, ...second.items]).toHaveLength(channel.videos.length);
+    expect(youtube.calls.filter((request) => request.resource === 'playlistItems')).toHaveLength(2);
+    expect(youtube.calls.filter((request) => request.resource === 'videos')).toHaveLength(2);
+  });
+
   it('filters videos by keywords, ranges, engagement, age and analysis status', async () => {
     const { cookie } = await newUser();
     youtube.add(sampleChannel());

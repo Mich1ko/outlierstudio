@@ -1558,7 +1558,7 @@
   }
 
   .vcard[data-short='false'] .vcard-media {
-    aspect-ratio: 4 / 3;
+    aspect-ratio: 16 / 9;
   }
 
   .vcard:hover .vthumb {
@@ -3269,6 +3269,46 @@ html:not([data-theme-ready]) *::after {
     gap: 26px 16px;
   }
 
+  .video-orientation-groups,
+  .video-orientation-group {
+    display: grid;
+    gap: 16px;
+  }
+
+  .video-orientation-groups {
+    gap: 34px;
+  }
+
+  .video-orientation-head {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .video-orientation-head h2 {
+    font-size: 16px;
+  }
+
+  .video-orientation-head span {
+    min-width: 22px;
+    padding: 2px 7px;
+    border-radius: 999px;
+    background: var(--surface-sunken);
+    color: var(--text-muted);
+    font-size: 11px;
+    text-align: center;
+  }
+
+  .vgrid[data-orientation='horizontal'] {
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  }
+
+  .vgrid[data-orientation='vertical'] {
+    grid-template-columns: repeat(auto-fill, minmax(180px, 220px));
+  }
+
   .feed-sentinel {
     min-height: 72px;
     display: flex;
@@ -3845,6 +3885,14 @@ html:not([data-theme-ready]) *::after {
 
     .feed-stats {
       grid-template-columns: 1fr;
+    }
+
+    .vgrid[data-orientation='horizontal'] {
+      grid-template-columns: 1fr;
+    }
+
+    .vgrid[data-orientation='vertical'] {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
     .filter-toolbar {

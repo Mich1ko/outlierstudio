@@ -139,15 +139,22 @@ export async function fetchChannel(ref: YouTubeRef): Promise<ChannelInfo | null>
   return item ? toChannel(item) : null;
 }
 
-/** Ids of the channel's most recent uploads, newest first (at most 50). */
+/** Ids of a channel's uploads, newest first. Pass Infinity to read the full public playlist. */
 export async function fetchRecentVideoIds(uploadsPlaylistId: string, max = 50): Promise<string[]> {
   try {
-    const data = await call<{ items?: { contentDetails?: { videoId?: string } }[] }>('playlistItems', {
-      part: 'contentDetails',
-      playlistId: uploadsPlaylistId,
-      maxResults: String(Math.min(50, max)),
-    });
-    return (data.items ?? []).map((i) => i.contentDetails?.videoId).filter((id): id is string => Boolean(id));
+    const ids: string[] = [];
+    let pageToken: string | undefined;
+    do {
+      const data = await call<{ items?: { contentDetails?: { videoId?: string } }[]; nextPageToken?: string }>('playlistItems', {
+        part: 'contentDetails',
+        playlistId: uploadsPlaylistId,
+        maxResults: String(Math.min(50, max - ids.length)),
+        ...(pageToken ? { pageToken } : {}),
+      });
+      ids.push(...(data.items ?? []).map((i) => i.contentDetails?.videoId).filter((id): id is string => Boolean(id)));
+      pageToken = data.nextPageToken;
+    } while (pageToken && ids.length < max);
+    return ids.slice(0, max);
   } catch (err) {
     // A channel with no public uploads has no uploads playlist.
     if (err instanceof AppError && err.code === 'video_data_not_found') return [];
@@ -157,27 +164,30 @@ export async function fetchRecentVideoIds(uploadsPlaylistId: string, max = 50): 
 
 export async function fetchVideos(ids: string[]): Promise<VideoInfo[]> {
   if (ids.length === 0) return [];
-  const data = await call<{ items?: VideoResource[] }>('videos', {
-    part: 'snippet,statistics,contentDetails',
-    id: ids.slice(0, 50).join(','),
-    maxResults: '50',
-  });
   const out: VideoInfo[] = [];
-  for (const v of data.items ?? []) {
-    const published = v.snippet?.publishedAt ? new Date(v.snippet.publishedAt) : null;
-    if (!published || Number.isNaN(published.getTime()) || !v.snippet?.channelId) continue;
-    out.push({
-      externalId: v.id,
-      channelExternalId: v.snippet.channelId,
-      title: v.snippet.title || 'Untitled video',
-      description: (v.snippet.description ?? '').slice(0, 2000),
-      publishedAt: published,
-      durationSeconds: parseIsoDuration(v.contentDetails?.duration),
-      thumbnailUrl: thumb(v.snippet.thumbnails),
-      viewCount: toInt(v.statistics?.viewCount),
-      likeCount: toInt(v.statistics?.likeCount),
-      commentCount: toInt(v.statistics?.commentCount),
+  for (let start = 0; start < ids.length; start += 50) {
+    const batch = ids.slice(start, start + 50);
+    const data = await call<{ items?: VideoResource[] }>('videos', {
+      part: 'snippet,statistics,contentDetails',
+      id: batch.join(','),
+      maxResults: String(batch.length),
     });
+    for (const v of data.items ?? []) {
+      const published = v.snippet?.publishedAt ? new Date(v.snippet.publishedAt) : null;
+      if (!published || Number.isNaN(published.getTime()) || !v.snippet?.channelId) continue;
+      out.push({
+        externalId: v.id,
+        channelExternalId: v.snippet.channelId,
+        title: v.snippet.title || 'Untitled video',
+        description: (v.snippet.description ?? '').slice(0, 2000),
+        publishedAt: published,
+        durationSeconds: parseIsoDuration(v.contentDetails?.duration),
+        thumbnailUrl: thumb(v.snippet.thumbnails),
+        viewCount: toInt(v.statistics?.viewCount),
+        likeCount: toInt(v.statistics?.likeCount),
+        commentCount: toInt(v.statistics?.commentCount),
+      });
+    }
   }
   return out;
 }

@@ -79,8 +79,14 @@ export class FakeYouTube {
     if (resource === 'playlistItems') {
       const channel = [...this.channels.values()].find((c) => `UU${c.id.slice(2)}` === params.playlistId);
       if (!channel || channel.videos.length === 0) return fail(404, 'playlistNotFound');
-      const newest = [...channel.videos].sort((a, b) => b.publishedAt.localeCompare(a.publishedAt)).slice(0, Number(params.maxResults ?? 5));
-      return send(200, { items: newest.map((v) => ({ contentDetails: { videoId: v.id, videoPublishedAt: v.publishedAt } })) });
+      const all = [...channel.videos].sort((a, b) => b.publishedAt.localeCompare(a.publishedAt));
+      const start = Number(params.pageToken ?? 0);
+      const end = start + Number(params.maxResults ?? 5);
+      const page = all.slice(start, end);
+      return send(200, {
+        items: page.map((v) => ({ contentDetails: { videoId: v.id, videoPublishedAt: v.publishedAt } })),
+        ...(end < all.length ? { nextPageToken: String(end) } : {}),
+      });
     }
     if (resource === 'videos') {
       const items = (params.id ?? '').split(',').flatMap((id) => {

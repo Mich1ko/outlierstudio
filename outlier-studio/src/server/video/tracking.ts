@@ -139,10 +139,13 @@ export async function refreshChannel(
   if (!claimed) return false;
 
   try {
+    // Read this before fetching so the platform client can decide whether the
+    // channel needs a full-history backfill or only a recent-video refresh.
+    const known = await db.select({ id: videos.id, externalId: videos.externalId, viewsPerHour: videos.viewsPerHour }).from(videos).where(eq(videos.channelId, channelId));
     const snapshot =
       opts.known && opts.knownVideos
         ? { info: opts.known, videos: opts.knownVideos }
-        : await fetchSnapshot(claimed.platform as MonitoredPlatform, claimed.externalId, opts.known);
+        : await fetchSnapshot(claimed.platform as MonitoredPlatform, claimed.externalId, opts.known, known.length);
     if (!snapshot) throw new AppError(404, 'channel_not_found', 'This channel no longer exists on its platform.');
     const { info } = snapshot;
 
@@ -158,7 +161,6 @@ export async function refreshChannel(
     const fetched = snapshot.videos;
 
     // Previous snapshot of each video, read before the new ones are written.
-    const known = await db.select({ id: videos.id, externalId: videos.externalId, viewsPerHour: videos.viewsPerHour }).from(videos).where(eq(videos.channelId, channelId));
     const knownByExternal = new Map(known.map((k) => [k.externalId, k]));
     const previous =
       known.length === 0
