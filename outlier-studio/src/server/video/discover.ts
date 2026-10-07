@@ -1,5 +1,6 @@
 import 'server-only';
 import { tierFor, type TierKey } from '@/shared/tiers';
+import { httpUrl, int, runActor, str } from './apify';
 import { call, toChannel, type ChannelInfo, type ChannelResource } from './youtube';
 
 /**
@@ -14,7 +15,7 @@ const cache = new Map<string, { at: number; items: DiscoveredChannel[] }>();
 export type DiscoveredChannel = ChannelInfo & { tier: TierKey };
 
 export async function discoverYouTubeChannels(query: string, max = 25): Promise<DiscoveredChannel[]> {
-  const key = `${query.toLowerCase()}|${max}`;
+  const key = `youtube|${query.toLowerCase()}|${max}`;
   const hit = cache.get(key);
   if (hit && Date.now() - hit.at < CACHE_MS) return hit.items;
 
@@ -35,6 +36,41 @@ export async function discoverYouTubeChannels(query: string, max = 25): Promise<
     });
     items = (data.items ?? []).map(toChannel).map((c) => ({ ...c, tier: tierFor(c.subscriberCount) }));
   }
+
+  cache.set(key, { at: Date.now(), items });
+  return items;
+}
+
+/** Niche search over public Instagram profiles through Apify's search Actor. */
+export async function discoverInstagramChannels(query: string, max = 25): Promise<DiscoveredChannel[]> {
+  const key = `instagram|${query.toLowerCase()}|${max}`;
+  const hit = cache.get(key);
+  if (hit && Date.now() - hit.at < CACHE_MS) return hit.items;
+
+  const data = await runActor('instagramSearch', {
+    search: query,
+    searchType: 'user',
+    searchLimit: max,
+    enhanceUserSearchWithFacebookPage: false,
+  }, max);
+  const seen = new Set<string>();
+  const items = data.flatMap((item): DiscoveredChannel[] => {
+    const username = str(item.username).trim().toLowerCase();
+    if (!username || seen.has(username)) return [];
+    seen.add(username);
+    const followers = int(item.followersCount);
+    return [{
+      externalId: username,
+      title: str(item.fullName).trim() || username,
+      handle: `@${username}`,
+      thumbnailUrl: httpUrl(item.profilePicUrlHD) ?? httpUrl(item.profilePicUrl),
+      subscriberCount: followers,
+      viewCount: null,
+      videoCount: int(item.postsCount),
+      uploadsPlaylistId: null,
+      tier: tierFor(followers),
+    }];
+  });
 
   cache.set(key, { at: Date.now(), items });
   return items;

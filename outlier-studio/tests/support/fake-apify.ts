@@ -32,6 +32,8 @@ export class FakeApify {
   posts = new Map<string, FakePost>();
   /** Reels by Instagram username, returned for a profile run. */
   accounts = new Map<string, FakePost[]>();
+  /** Profile results by Instagram discovery query. */
+  instagramSearches = new Map<string, Record<string, unknown>[]>();
   failNext?: { status: number; message: string };
   private server = http.createServer((req, res) => this.handle(req, res));
 
@@ -48,6 +50,7 @@ export class FakeApify {
     this.transcripts.clear();
     this.posts.clear();
     this.accounts.clear();
+    this.instagramSearches.clear();
     this.defaultTranscript = null;
     this.failNext = undefined;
   }
@@ -77,6 +80,11 @@ export class FakeApify {
         const videoUrl = String((input.videoUrls as string[] | undefined)?.[0] ?? '');
         const text = this.transcripts.has(videoUrl) ? this.transcripts.get(videoUrl)! : this.defaultTranscript;
         return send(201, text === null ? [] : [{ url: videoUrl, language: 'en', text }]);
+      }
+
+      if (actor === DEFAULT_ACTORS.instagramSearch.replace('/', '~')) {
+        const query = String(input.search ?? '');
+        return send(201, this.instagramSearches.get(query) ?? []);
       }
 
       if (actor === DEFAULT_ACTORS.instagram.replace('/', '~') && Array.isArray(input.username)) {

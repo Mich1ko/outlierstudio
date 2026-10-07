@@ -49,7 +49,7 @@ npm run admin:promote -- you@example.com
 | `YOUTUBE_API_KEY` | for tracking | Google API key with YouTube Data API v3 enabled. Read only on the server. |
 | `APIFY_TOKEN` | for one-click analysis | Apify API token: YouTube transcripts, and TikTok / Instagram video numbers. Read only on the server. |
 | `APIFY_MONTHLY_BUDGET_USD` | no | Most to spend on Apify in a calendar month (UTC). Default 5. Never above 5 in code. Runs that would pass it are refused before they start. |
-| `APIFY_ACTOR_YOUTUBE_TRANSCRIPT`, `APIFY_ACTOR_TIKTOK`, `APIFY_ACTOR_INSTAGRAM` | no | Replace the default Apify Actors. See the defaults in `src/server/video/apify.ts`. |
+| `APIFY_ACTOR_YOUTUBE_TRANSCRIPT`, `APIFY_ACTOR_TIKTOK`, `APIFY_ACTOR_INSTAGRAM`, `APIFY_ACTOR_INSTAGRAM_SEARCH` | no | Replace the default Apify Actors. See the defaults in `src/server/video/apify.ts`. |
 | `TRACK_INTERVAL_HOURS` | no | Hours between automatic checks of each channel. Default 6. |
 | `DISABLE_SCHEDULER` | no | `1` turns off the built-in timer. |
 | `CRON_SECRET` | no | Enables `POST /api/cron/refresh` for an external scheduler. At least 16 characters. |
@@ -93,9 +93,10 @@ APIs, so the app runs Apify scrapers for both.
 3. Put it in `.env` as `APIFY_TOKEN=...` and restart the app.
 
 The default Actors are `devsef~youtube-transcript-scraper` (YouTube captions),
-`clockworks~tiktok-scraper` (TikTok) and `apify~instagram-reel-scraper`
+`clockworks~tiktok-scraper` (TikTok), `apify~instagram-reel-scraper`
 (Instagram single reels and account checks). Their input fields were written against the Actors' documentation
 and have not been run live yet, so check the first real run's output.
+Instagram niche discovery uses `apify~instagram-search-scraper`.
 TikTok and Instagram transcripts are not available: paste one in instead.
 
 What an Apify run is spent on:

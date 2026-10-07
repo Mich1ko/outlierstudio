@@ -2811,6 +2811,7 @@ html:not([data-theme-ready]) *::after {
 
   .page-head {
     position: relative;
+    z-index: 6;
     display: flex;
     align-items: flex-end;
     justify-content: space-between;

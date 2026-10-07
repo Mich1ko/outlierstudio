@@ -10,6 +10,7 @@ import { TIERS, TIER_LABEL, type TierKey } from '@/shared/tiers';
 import { youtubeChannelUrl } from '@/shared/youtube-url';
 
 type Result = {
+  platform: 'youtube' | 'instagram';
   externalId: string;
   title: string;
   handle: string | null;
@@ -22,6 +23,7 @@ type Result = {
 const FILTERS: ('all' | TierKey)[] = ['all', ...TIERS.map((t) => t.key), 'unknown'];
 
 export default function DiscoverPage() {
+  const [platform, setPlatform] = useState<'youtube' | 'instagram'>('youtube');
   const [query, setQuery] = useState('');
   const [tier, setTier] = useState<'all' | TierKey>('all');
   const [results, setResults] = useState<Result[] | null>(null);
@@ -33,7 +35,7 @@ export default function DiscoverPage() {
 
   useEffect(() => {
     api<ChannelList>('/api/channels')
-      .then((list) => setTracked(new Set(list.items.map((c) => c.externalId))))
+      .then((list) => setTracked(new Set(list.items.map((c) => `${c.platform}:${c.externalId}`))))
       .catch(() => undefined);
   }, []);
 
@@ -42,7 +44,7 @@ export default function DiscoverPage() {
     setLoading(true);
     setError(null);
     try {
-      const params = new URLSearchParams({ q: query, tier });
+      const params = new URLSearchParams({ q: query, tier, platform });
       const data = await api<{ items: Result[]; query: string }>(`/api/discover?${params}`);
       setResults(data.items);
       setSearched(data.query);
@@ -57,8 +59,11 @@ export default function DiscoverPage() {
     setBusy(channel.externalId);
     setError(null);
     try {
-      await api('/api/channels', { body: { url: youtubeChannelUrl(channel.externalId) } });
-      setTracked((prev) => new Set(prev).add(channel.externalId));
+      const url = channel.platform === 'instagram'
+        ? `https://www.instagram.com/${channel.externalId}/`
+        : youtubeChannelUrl(channel.externalId);
+      await api('/api/channels', { body: { url } });
+      setTracked((prev) => new Set(prev).add(`${channel.platform}:${channel.externalId}`));
     } catch (err) {
       setError(err as ApiError);
     } finally {
@@ -68,15 +73,23 @@ export default function DiscoverPage() {
 
   return (
     <div className="stack-lg" style={{ maxWidth: 1100 }}>
-      <PageHead title="Discover">Search a niche on YouTube and sort the channels by size. Add the ones worth watching to your watchlist.</PageHead>
+      <PageHead title="Discover">Search a niche on YouTube or Instagram and sort accounts by size. Add the ones worth watching to your watchlist.</PageHead>
+
+      <div className="tabs" role="group" aria-label="Discovery platform">
+        {(['youtube', 'instagram'] as const).map((value) => (
+          <button key={value} type="button" aria-pressed={platform === value} onClick={() => { setPlatform(value); setResults(null); setError(null); }}>
+            {value === 'youtube' ? 'YouTube' : 'Instagram'}
+          </button>
+        ))}
+      </div>
 
       <form onSubmit={search} className="discover-search" role="search" style={{ display: 'flex', gap: 8 }}>
         <input
           className="input"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="e.g. home workouts for busy parents"
-          aria-label="Niche to search"
+          placeholder={platform === 'instagram' ? 'e.g. running coaches Manila' : 'e.g. home workouts for busy parents'}
+          aria-label={`${platform === 'instagram' ? 'Instagram' : 'YouTube'} niche to search`}
           maxLength={100}
         />
         <button className="btn btn-primary" disabled={loading || query.trim().length < 2}>
@@ -97,25 +110,25 @@ export default function DiscoverPage() {
       {loading && <Skeleton lines={5} />}
 
       {!loading && results && results.length === 0 && (
-        <p className="muted">No YouTube channels matched &ldquo;{searched}&rdquo;{tier !== 'all' ? ` in ${TIER_LABEL[tier]} size` : ''}. Try a broader niche or another size.</p>
+        <p className="muted">No {platform === 'instagram' ? 'Instagram accounts' : 'YouTube channels'} matched &ldquo;{searched}&rdquo;{tier !== 'all' ? ` in ${TIER_LABEL[tier]} size` : ''}. Try a broader niche or another size.</p>
       )}
 
       {!loading && results && results.length > 0 && (
         <ul className="panel panel-open">
           {results.map((c) => (
-            <li key={c.externalId} className="channel">
+            <li key={`${c.platform}:${c.externalId}`} className="channel">
               <Picture className="avatar" src={c.thumbnailUrl} />
               <div className="channel-name">
                 <span>{c.title}</span>
                 <span className="muted small">
-                  {c.handle ?? 'YouTube'} · {TIER_LABEL[c.tier]} · {c.videoCount ?? 0} videos
+                  {c.handle ?? (c.platform === 'instagram' ? 'Instagram' : 'YouTube')} · {TIER_LABEL[c.tier]} · {c.videoCount ?? 0} {c.platform === 'instagram' ? 'posts' : 'videos'}
                 </span>
               </div>
               <div className="stat">
                 <b>{c.subscriberCount === null ? 'Hidden' : compact(c.subscriberCount)}</b>
-                <span>subscribers</span>
+                <span>{c.platform === 'instagram' ? 'followers' : 'subscribers'}</span>
               </div>
-              {tracked.has(c.externalId) ? (
+              {tracked.has(`${c.platform}:${c.externalId}`) ? (
                 <span className="muted small">On your watchlist</span>
               ) : (
                 <button type="button" className="btn btn-sm" onClick={() => track(c)} disabled={busy !== null}>

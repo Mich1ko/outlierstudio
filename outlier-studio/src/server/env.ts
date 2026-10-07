@@ -26,6 +26,7 @@ const schema = z.object({
   APIFY_ACTOR_YOUTUBE_TRANSCRIPT: z.string().optional(),
   APIFY_ACTOR_TIKTOK: z.string().optional(),
   APIFY_ACTOR_INSTAGRAM: z.string().optional(),
+  APIFY_ACTOR_INSTAGRAM_SEARCH: z.string().optional(),
   /** Honoured only when NODE_ENV === 'test' (see video/apify.ts). */
   APIFY_BASE_URL: z.string().optional(),
   /** How often each tracked channel is re-checked. */

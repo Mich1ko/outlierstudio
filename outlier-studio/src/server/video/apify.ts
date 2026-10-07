@@ -24,6 +24,7 @@ export const DEFAULT_ACTORS = {
   youtubeTranscript: 'devsef~youtube-transcript-scraper',
   tiktok: 'clockworks~tiktok-scraper',
   instagram: 'apify~instagram-reel-scraper',
+  instagramSearch: 'apify~instagram-search-scraper',
 } as const;
 type ActorKind = keyof typeof DEFAULT_ACTORS;
 
@@ -42,6 +43,7 @@ function actorId(kind: ActorKind): string {
     youtubeTranscript: e.APIFY_ACTOR_YOUTUBE_TRANSCRIPT,
     tiktok: e.APIFY_ACTOR_TIKTOK,
     instagram: e.APIFY_ACTOR_INSTAGRAM,
+    instagramSearch: e.APIFY_ACTOR_INSTAGRAM_SEARCH,
   }[kind];
   return override || DEFAULT_ACTORS[kind];
 }
@@ -60,6 +62,7 @@ const PRICE_PER_RESULT_USD: Record<ActorKind, number> = {
   // Free-plan price is the highest current tier, so the reservation is safe
   // regardless of which Apify plan the server uses.
   instagram: 2.6 / 1000,
+  instagramSearch: 2.7 / 1000,
 };
 const ACTOR_START_USD = 0.001;
 const INSTAGRAM_TRANSCRIPT_USD = 48 / 1000;
