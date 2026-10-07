@@ -51,8 +51,7 @@ function ChannelRow({ channel, onChanged }: { channel: TrackedChannel; onChanged
   return (
     <li className="channel">
       <span className="channel-avatar" aria-hidden="true">
-        <span>{channel.title.split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase()}</span>
-        <Picture className="avatar" src={channel.thumbnailUrl} />
+        <Picture className="avatar" src={channel.thumbnailUrl} name={channel.title} />
       </span>
       <div className="channel-name">
         <a href={authorUrl(channel)} target="_blank" rel="noreferrer">

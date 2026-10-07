@@ -95,6 +95,7 @@ export async function analyzeVideo(userId: string, request: AnalysisInput) {
     schemaName: 'video_analysis',
     schema: Output,
     temperature: 0.3,
+    maxOutputTokens: 8192,
   });
 
   const generation = await saveGeneration({

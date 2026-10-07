@@ -51,7 +51,13 @@ export async function fetchSnapshot(
 ): Promise<{ info: ChannelInfo; videos: VideoInfo[] } | null> {
   if (platform === 'instagram') {
     const items = await instagramItemsFor(externalId);
-    const info = known ?? instagramAccount(items, externalId);
+    const fresh = instagramAccount(items, externalId);
+    const info = fresh ? {
+      ...fresh,
+      thumbnailUrl: fresh.thumbnailUrl ?? known?.thumbnailUrl ?? null,
+      subscriberCount: fresh.subscriberCount ?? known?.subscriberCount ?? null,
+      videoCount: fresh.videoCount ?? known?.videoCount ?? null,
+    } : known;
     return info ? { info, videos: instagramReels(items, externalId) } : null;
   }
   const info = known ?? (await fetchChannel({ kind: 'channelId', id: externalId }));

@@ -51,7 +51,7 @@ describe('Instagram profile links', () => {
     expect(res.status).toBe(201);
 
     const [channel] = (await (await call(listChannelsRoute, 'GET', '/api/channels', { cookie })).json()).items;
-    expect(channel).toMatchObject({ platform: 'instagram', monitored: true, externalId: 'trailnotes', title: 'Trail Notes', handle: '@trailnotes', lastError: null });
+    expect(channel).toMatchObject({ platform: 'instagram', monitored: true, externalId: 'trailnotes', title: 'Trail Notes', handle: '@trailnotes', thumbnailUrl: 'https://cdn.example/trailnotes.jpg', lastError: null });
 
     const all = await feed(cookie);
     expect(all.items.map((v: { title: string }) => v.title)).toEqual(['The downhill mistake that wrecks your knees', 'Older reel']);

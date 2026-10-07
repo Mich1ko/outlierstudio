@@ -136,6 +136,7 @@ function instagramItem(p: FakePost, url: string): Record<string, unknown> {
     caption: p.title,
     ownerUsername: p.username,
     ownerFullName: p.displayName,
+    ownerProfilePicUrl: `https://cdn.example/${p.username}.jpg`,
     videoPlayCount: p.views,
     likesCount: p.likes ?? null,
     commentsCount: p.comments ?? null,

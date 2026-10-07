@@ -42,7 +42,7 @@ export async function discoverYouTubeChannels(query: string, max = 25): Promise<
 }
 
 /** Niche search over public Instagram profiles through Apify's search Actor. */
-export async function discoverInstagramChannels(query: string, max = 25): Promise<DiscoveredChannel[]> {
+export async function discoverInstagramChannels(query: string, max = 12): Promise<DiscoveredChannel[]> {
   const key = `instagram|${query.toLowerCase()}|${max}`;
   const hit = cache.get(key);
   if (hit && Date.now() - hit.at < CACHE_MS) return hit.items;
@@ -52,6 +52,7 @@ export async function discoverInstagramChannels(query: string, max = 25): Promis
     searchType: 'user',
     searchLimit: max,
     enhanceUserSearchWithFacebookPage: false,
+    liveSearch: false,
   }, max);
   const seen = new Set<string>();
   const items = data.flatMap((item): DiscoveredChannel[] => {

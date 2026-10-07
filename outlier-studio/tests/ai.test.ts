@@ -120,6 +120,15 @@ describe('hooks (structured JSON)', () => {
 });
 
 describe('Groq failures are reported, not hidden', () => {
+  it('recovers one malformed analysis response with a JSON-object retry', async () => {
+    const { cookie } = await newUser();
+    groq.enqueue({ kind: 'json', content: '{bad json' }, { kind: 'json', content: ANALYSIS_JSON });
+    const res = await call(analyze, 'POST', '/api/ai/analyze', { cookie, body: analysisBody });
+    expect(res.status).toBe(201);
+    expect(groq.calls).toHaveLength(2);
+    expect(groq.calls[1]!.body.response_format).toEqual({ type: 'json_object' });
+  });
+
   const cases = [
     ['rate limit', { status: 429, body: { error: { message: 'Rate limit reached', type: 'tokens', code: 'rate_limit_exceeded' } }, headers: { 'retry-after': '7' } }, 429, 'ai_rate_limited'],
     ['deprecated model', { status: 404, body: { error: { message: 'The model does not exist', type: 'invalid_request_error', code: 'model_not_found' } } }, 503, 'ai_model_unavailable'],

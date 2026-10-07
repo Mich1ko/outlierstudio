@@ -48,7 +48,7 @@ describe('Instagram discovery', () => {
     });
     expect(apify.calls.at(-1)).toMatchObject({
       actor: 'apify~instagram-search-scraper',
-      input: { search: 'running coaches Manila', searchType: 'user', searchLimit: 25, enhanceUserSearchWithFacebookPage: false },
+      input: { search: 'running coaches Manila', searchType: 'user', searchLimit: 12, enhanceUserSearchWithFacebookPage: false, liveSearch: false },
       key: APIFY_TOKEN,
     });
   });

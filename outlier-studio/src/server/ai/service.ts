@@ -78,36 +78,50 @@ export async function generateJson<T>(call: BaseCall & { schemaName: string; sch
   try {
     const { $schema: _drop, ...jsonSchema } = z.toJSONSchema(call.schema) as Record<string, unknown>;
     const strict = supportsStrictJson(model);
-    const params = baseParams(call, model);
-    if (!strict) {
-      // JSON object mode guarantees valid JSON only, so the schema goes in the prompt.
-      params.messages[0]!.content += `\n\nRespond with a single JSON object matching this JSON Schema:\n${JSON.stringify(jsonSchema)}`;
+    let data: T | undefined;
+    // Analysis responses are larger and can exhaust the model's output budget.
+    // Retry once in JSON-object mode when strict output is rejected or malformed.
+    for (let attempt = 0; attempt < (call.feature === 'analysis' ? 2 : 1); attempt++) {
+      const useStrict = strict && attempt === 0;
+      const params = baseParams(call, model);
+      if (!useStrict) {
+        params.messages[0]!.content += `\n\nRespond with a single JSON object matching this JSON Schema:\n${JSON.stringify(jsonSchema)}`;
+      }
+      try {
+        const completion = await groq.chat.completions.create(
+          {
+            ...params,
+            stream: false,
+            response_format: useStrict
+              ? { type: 'json_schema', json_schema: { name: call.schemaName, strict: true, schema: jsonSchema } }
+              : { type: 'json_object' },
+          },
+          { signal: call.signal },
+        );
+        const currentUsage = readUsage(completion.usage);
+        if (currentUsage) usage = usage ? {
+          inputTokens: usage.inputTokens + currentUsage.inputTokens,
+          outputTokens: usage.outputTokens + currentUsage.outputTokens,
+          totalTokens: usage.totalTokens + currentUsage.totalTokens,
+        } : currentUsage;
+        groqRequestId = completion.x_groq?.id ?? null;
+        const parsed = JSON.parse(completion.choices[0]?.message?.content ?? '');
+        const checked = call.schema.safeParse(parsed);
+        if (!checked.success) throw invalidOutput();
+        data = checked.data;
+        break;
+      } catch (err) {
+        if (err instanceof SyntaxError) err = invalidOutput();
+        let mapped: AppError | null = null;
+        try { mapped = mapGroqError(err); } catch { /* Keep unexpected failures for the route logger. */ }
+        if (attempt === 0 && call.feature === 'analysis' && mapped?.code === 'ai_invalid_output') continue;
+        throw err;
+      }
     }
-    const completion = await groq.chat.completions.create(
-      {
-        ...params,
-        stream: false,
-        response_format: strict
-          ? { type: 'json_schema', json_schema: { name: call.schemaName, strict: true, schema: jsonSchema } }
-          : { type: 'json_object' },
-      },
-      { signal: call.signal },
-    );
-    usage = readUsage(completion.usage);
-    groqRequestId = completion.x_groq?.id ?? null;
-
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(completion.choices[0]?.message?.content ?? '');
-    } catch {
-      throw invalidOutput();
-    }
-    // Validate even in strict mode: never trust model output on shape alone.
-    const checked = call.schema.safeParse(parsed);
-    if (!checked.success) throw invalidOutput();
+    if (data === undefined) throw invalidOutput();
 
     await completeRequest(requestId, { model, usage, latencyMs: Date.now() - started, groqRequestId });
-    return { requestId, model, data: checked.data, usage };
+    return { requestId, model, data, usage };
   } catch (err) {
     throw await recordFailure(requestId, err, { model, usage, latencyMs: Date.now() - started, groqRequestId }, { aborted: call.signal?.aborted });
   }

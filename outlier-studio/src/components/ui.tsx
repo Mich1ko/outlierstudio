@@ -57,7 +57,7 @@ export function ErrorNotice({ error }: { error: ApiError | null }) {
     transcript_quota: 'Nothing was charged.',
     transcript_timeout: 'Nothing was charged.',
     video_data_quota: 'Videos already in your feed are unaffected.',
-    video_not_accessible: 'Paste the transcript in the Transcript tab if you can open the video yourself.',
+    video_not_accessible: 'Open “Paste a transcript instead” below if you can access the captions yourself.',
     scraper_configuration: 'The server connector needs updating before this link can be retried.',
   };
   return (

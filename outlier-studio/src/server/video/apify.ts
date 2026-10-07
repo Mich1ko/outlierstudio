@@ -287,7 +287,7 @@ function instagramMetadata(item: Item, videoUrl: string): VideoMetadata | null {
     url: httpUrl(item.url) ?? videoUrl,
     title: (caption.split('\n')[0] ?? '').slice(0, 200) || 'Untitled reel',
     description: caption.slice(0, 2000),
-    author: { username, displayName: str(item.ownerFullName) || username, avatarUrl: null },
+    author: { username, displayName: str(item.ownerFullName) || username, avatarUrl: httpUrl(item.ownerProfilePicUrl) },
     views: int(item.videoPlayCount ?? item.videoViewCount),
     likes: int(item.likesCount),
     comments: int(item.commentsCount),
@@ -303,7 +303,7 @@ function assertReadableInstagramItem(item: Item): void {
   if (code === 'not_found') {
     throw new AppError(422, 'video_not_accessible', 'Instagram did not expose this post to the public scraper. Check that the link opens in an incognito window and that the account and post are public.');
   }
-  throw new AppError(422, 'video_not_accessible', 'Instagram blocked the public scraper from reading this post. Try again later or paste the transcript instead.');
+  throw new AppError(422, 'video_not_accessible', 'Apify could not read this Instagram post. The post may be restricted or Instagram may be blocking automated access.');
 }
 
 /** Public numbers and author of one TikTok or Instagram video, from its link. */
