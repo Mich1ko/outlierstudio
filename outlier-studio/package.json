@@ -17,8 +17,6 @@
     "@electric-sql/pglite": "^0.5.8",
     "@fontsource-variable/atkinson-hyperlegible-next": "^5.3.0",
     "@fontsource-variable/bricolage-grotesque": "^5.3.0",
-    "@neon/config": "^1.8.4",
-    "@neon/env": "^1.5.1",
     "drizzle-orm": "^0.45.3",
     "groq-sdk": "^1.6.0",
     "motion": "^14.0.0",
