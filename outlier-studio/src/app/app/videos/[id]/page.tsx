@@ -144,6 +144,7 @@ function VideoScreen() {
           </div>
         ) : analysis ? (
           <>
+            <div className="breakdown-stepper" aria-label="Breakdown sections"><span><b>1</b>Hook</span><span><b>2</b>Structure</span><span><b>3</b>Ideas</span></div>
             <AnalysisView analysis={analysis.output} transcript={analysis.input.transcript} title={video.title} hideMultiple />
             <div className="row">
               <button type="button" className="btn btn-sm" onClick={() => analyze()}>
@@ -204,10 +205,7 @@ function VideoScreen() {
       <section className="stack">
         <h2>Views at each check</h2>
         {history.filter((h) => h.viewCount !== null).length < 2 ? (
-          <p className="muted">
-            Checked once so far, {ago(video.lastCheckedAt)}.{' '}
-            {video.monitored ? 'The chart starts after the next check.' : 'Use Update numbers later to start a chart; TikTok and Instagram videos are not checked automatically.'}
-          </p>
+          <div className="ghost-chart panel" aria-label="Chart awaiting more data"><svg viewBox="0 0 600 150" preserveAspectRatio="none" aria-hidden="true"><path d="M0 130 C80 122 90 100 160 106 S250 70 330 82 S450 42 600 28" /><line x1="0" y1="145" x2="600" y2="145" /></svg><div><strong>First data point at next check</strong><span className="muted">Checked once so far, {ago(video.lastCheckedAt)}. {video.monitored ? 'We’ll start the trend line automatically.' : 'Use Update numbers later to start the chart.'}</span></div></div>
         ) : (
           <div className="panel">
             <ViewsChart history={history} />

@@ -50,12 +50,16 @@ function ChannelRow({ channel, onChanged }: { channel: TrackedChannel; onChanged
 
   return (
     <li className="channel">
-      <Picture className="avatar" src={channel.thumbnailUrl} />
+      <span className="channel-avatar" aria-hidden="true">
+        <span>{channel.title.split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase()}</span>
+        <Picture className="avatar" src={channel.thumbnailUrl} />
+      </span>
       <div className="channel-name">
         <a href={authorUrl(channel)} target="_blank" rel="noreferrer">
           {channel.title}
         </a>
-        <span className="muted small">
+        <span className="muted small channel-status">
+          <i data-live={busy === 'check'} />
           {channel.handle ?? PLATFORM_NAME[channel.platform]}
           {channel.monitored ? `, checked ${channel.lastCheckedAt ? ago(channel.lastCheckedAt) : 'never'}` : `, ${PLATFORM_NAME[channel.platform]}, videos added by link`}
         </span>
@@ -92,11 +96,11 @@ function ChannelRow({ channel, onChanged }: { channel: TrackedChannel; onChanged
           </>
         ) : (
           <>
-            <Link className="btn btn-sm" href={`/app/feed?channel=${channel.id}&days=all`}>
+            <Link className="btn btn-sm btn-primary" href={`/app/feed?channel=${channel.id}&days=all`}>
               Videos
             </Link>
             {channel.monitored && (
-              <button type="button" className="btn btn-sm" onClick={() => act('report')} disabled={busy !== null}>
+              <button type="button" className="btn btn-sm btn-secondary" onClick={() => act('report')} disabled={busy !== null}>
                 {busy === 'report' ? 'Writing report' : 'Report'}
               </button>
             )}
@@ -212,6 +216,7 @@ export default function WatchlistPage() {
       <PageHead title="Watchlist">
         The YouTube and Instagram accounts you compete with. Each one is checked{data ? ` every ${data.intervalHours} hours` : ' on a schedule'} for new uploads, views and subscribers.
       </PageHead>
+      {data && <div className="watchlist-capacity" aria-label={`${monitoredCount} of ${data.limit} channel slots used`}><div><span>Channel capacity</span><strong>{monitoredCount} of {data.limit}</strong></div><div className="meter"><span style={{ width: `${Math.min(100, monitoredCount / data.limit * 100)}%` }} /></div></div>}
 
       {data && !data.configured && (
         <div className="notice notice-error" role="alert">
@@ -256,7 +261,7 @@ export default function WatchlistPage() {
       )}
 
       <Group title="Your channels" note="Your own channels are left out of the competitor list on the Videos page." channels={mine} onChanged={load} />
-      <Group title={data ? `Competitors (${monitoredCount} of ${data.limit} channels used)` : 'Competitors'} channels={competitors} onChanged={load} />
+      <Group title="Competitors" channels={competitors} onChanged={load} />
       <Group title="From pasted links" note="TikTok accounts whose videos you added one at a time, and single Instagram reels. These are not checked automatically." channels={byLink} onChanged={load} />
 
       {monitoredCount > 0 && (

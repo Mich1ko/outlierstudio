@@ -57,8 +57,15 @@ export type Item = Record<string, unknown>;
 const PRICE_PER_RESULT_USD: Record<ActorKind, number> = {
   youtubeTranscript: 2 / 1000,
   tiktok: 1.7 / 1000,
-  instagram: 1.5 / 1000,
+  // Free-plan price is the highest current tier, so the reservation is safe
+  // regardless of which Apify plan the server uses.
+  instagram: 2.6 / 1000,
 };
+const ACTOR_START_USD = 0.001;
+const INSTAGRAM_TRANSCRIPT_USD = 48 / 1000;
+// Apify rejects Reel Scraper runs below this value before the Actor starts,
+// even when a one-result price calculation would be lower.
+const INSTAGRAM_MIN_RUN_USD = 0.0073;
 
 /** Whatever APIFY_MONTHLY_BUDGET_USD says, this server never spends more than $5 in a month. */
 const HARD_CAP_USD = 5;
@@ -87,9 +94,10 @@ export async function apifySpendThisMonth(): Promise<number> {
  * the reservation would pass the budget. The check runs under a lock so two
  * runs at once cannot both fit in the last dollar.
  */
-async function reserve(kind: ActorKind, results: number): Promise<{ id: number; capUsd: number }> {
+async function reserve(kind: ActorKind, results: number, extraPerResultUsd = 0): Promise<{ id: number; capUsd: number }> {
   const db = await getDb();
-  const capUsd = Math.ceil(PRICE_PER_RESULT_USD[kind] * results * 1e6) / 1e6;
+  const calculated = ACTOR_START_USD + (PRICE_PER_RESULT_USD[kind] + extraPerResultUsd) * results;
+  const capUsd = Math.ceil(Math.max(calculated, kind === 'instagram' ? INSTAGRAM_MIN_RUN_USD : 0) * 1e6) / 1e6;
   return db.transaction(async (tx) => {
     await tx.execute(sql`select pg_advisory_xact_lock(4242)`);
     const [row] = await tx
@@ -112,9 +120,9 @@ async function finish(id: number, status: 'succeeded' | 'failed', costUsd: numbe
 }
 
 /** Runs one Actor and returns the items it saved. An empty dataset is an empty list, not an error. */
-export async function runActor(kind: ActorKind, input: Record<string, unknown>, results: number): Promise<Item[]> {
+export async function runActor(kind: ActorKind, input: Record<string, unknown>, results: number, extraPerResultUsd = 0): Promise<Item[]> {
   if (!env().APIFY_TOKEN) throw notConfigured('Automatic transcripts and video numbers need an Apify token on the server.');
-  const reservation = await reserve(kind, results);
+  const reservation = await reserve(kind, results, extraPerResultUsd);
   let items: Item[];
   try {
     items = await callActor(kind, input, reservation.capUsd);
@@ -122,7 +130,8 @@ export async function runActor(kind: ActorKind, input: Record<string, unknown>, 
     await finish(reservation.id, 'failed', null);
     throw err;
   }
-  await finish(reservation.id, 'succeeded', Math.min(reservation.capUsd, PRICE_PER_RESULT_USD[kind] * items.length));
+  const resultCost = items.length ? ACTOR_START_USD + (PRICE_PER_RESULT_USD[kind] + extraPerResultUsd) * items.length : ACTOR_START_USD;
+  await finish(reservation.id, 'succeeded', Math.min(reservation.capUsd, resultCost));
   return items;
 }
 
@@ -151,6 +160,12 @@ async function callActor(kind: ActorKind, input: Record<string, unknown>, capUsd
   const body = (await res.json().catch(() => null)) as unknown;
   if (res.ok) return Array.isArray(body) ? (body as Item[]) : [];
 
+  const providerError = body && typeof body === 'object' && 'error' in body ? (body as { error?: unknown }).error : null;
+  const providerType = providerError && typeof providerError === 'object' && 'type' in providerError ? str((providerError as { type?: unknown }).type) : '';
+  if (providerType === 'max-total-charge-usd-below-minimum') {
+    throw new AppError(503, 'scraper_configuration', 'The scraper changed its minimum run price. Update the Apify spending cap before trying again.');
+  }
+
   if (res.status === 401 || res.status === 403) {
     throw notConfigured('The Apify token was rejected. Check APIFY_TOKEN in the server settings.');
   }
@@ -167,7 +182,7 @@ async function callActor(kind: ActorKind, input: Record<string, unknown>, capUsd
     throw new AppError(504, 'transcript_timeout', 'The scrape is taking too long. Try again in a minute.');
   }
   if (res.status >= 500) throw new AppError(503, 'transcripts_unavailable', 'The scraping service is having problems. Please try again shortly.');
-  throw new AppError(422, 'video_not_accessible', 'The scraper could not read that video. It may be private or deleted.');
+  throw new AppError(422, 'video_not_accessible', 'The scraping provider rejected this request before returning video data. Try again shortly or paste the transcript instead.');
 }
 
 export type Transcript = { text: string; lang: string | null };
@@ -202,16 +217,20 @@ function transcriptText(item: Item): string {
 const none = () => new AppError(422, 'transcript_unavailable', 'This video has no transcript available. You can paste one in instead.');
 
 /**
- * The spoken words of a YouTube video, from its captions. Only YouTube is
- * supported: the transcript Actor reads YouTube captions, and no configured
- * Actor reads TikTok or Instagram audio.
+ * The spoken words of a YouTube video or Instagram reel. Instagram uses the
+ * transcript add-on of the same Actor that reads its public metrics.
  */
 export async function fetchTranscript(videoUrl: string): Promise<Transcript> {
-  if (!YOUTUBE.test(videoUrl)) {
-    throw new AppError(422, 'transcript_unavailable', 'Automatic transcripts work for YouTube videos. You can paste one in instead.');
+  let item: Item | undefined;
+  if (YOUTUBE.test(videoUrl)) {
+    [item] = await runActor('youtubeTranscript', { videoUrls: [videoUrl], language: 'en', includeSegments: false }, 1);
+  } else if (INSTAGRAM.test(videoUrl)) {
+    [item] = await runActor('instagram', { username: [videoUrl], resultsLimit: 1, includeTranscript: true }, 1, INSTAGRAM_TRANSCRIPT_USD);
+  } else {
+    throw new AppError(422, 'transcript_unavailable', 'Automatic transcripts work for YouTube and Instagram videos. You can paste one in instead.');
   }
-  const [item] = await runActor('youtubeTranscript', { videoUrls: [videoUrl], language: 'en', includeSegments: false }, 1);
   if (!item) throw none();
+  if (INSTAGRAM.test(videoUrl)) assertReadableInstagramItem(item);
   const text = transcriptText(item);
   if (!text) throw none();
   return { text, lang: str(item.language) || str(item.lang) || null };
@@ -275,6 +294,15 @@ function instagramMetadata(item: Item, videoUrl: string): VideoMetadata | null {
   };
 }
 
+function assertReadableInstagramItem(item: Item): void {
+  const code = str(item.error);
+  if (!code) return;
+  if (code === 'not_found') {
+    throw new AppError(422, 'video_not_accessible', 'Instagram did not expose this post to the public scraper. Check that the link opens in an incognito window and that the account and post are public.');
+  }
+  throw new AppError(422, 'video_not_accessible', 'Instagram blocked the public scraper from reading this post. Try again later or paste the transcript instead.');
+}
+
 /** Public numbers and author of one TikTok or Instagram video, from its link. */
 export async function fetchVideoMetadata(videoUrl: string): Promise<VideoMetadata> {
   let meta: VideoMetadata | null = null;
@@ -282,11 +310,14 @@ export async function fetchVideoMetadata(videoUrl: string): Promise<VideoMetadat
     const [item] = await runActor('tiktok', { postURLs: [videoUrl], resultsPerPage: 1 }, 1);
     meta = item ? tiktokMetadata(item, videoUrl) : null;
   } else if (INSTAGRAM.test(videoUrl)) {
-    const [item] = await runActor('instagram', { directUrls: [videoUrl], resultsLimit: 1 }, 1);
+    // The maintained Reel Scraper uses one `username` array for profile names,
+    // profile URLs and direct reel/post URLs.
+    const [item] = await runActor('instagram', { username: [videoUrl], resultsLimit: 1 }, 1);
+    if (item) assertReadableInstagramItem(item);
     meta = item ? instagramMetadata(item, videoUrl) : null;
   } else {
     throw new AppError(400, 'invalid_link', 'Only TikTok and Instagram videos are read this way.');
   }
-  if (!meta) throw new AppError(404, 'video_not_found', 'No video was found at that link. It may be private or deleted.');
+  if (!meta) throw new AppError(404, 'video_not_found', 'No public video data was returned for this link. Check that it opens while logged out, then try again.');
   return meta;
 }

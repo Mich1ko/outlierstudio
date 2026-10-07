@@ -8,6 +8,7 @@ import { PlatformSelect } from '@/components/PlatformSelect';
 import { ErrorNotice, Field, PageHead, useReveal, ReferenceTranscript, Skeleton } from '@/components/ui';
 import { api, compact, type ApiError } from '@/lib/api';
 import type { Generation } from '@/lib/types';
+import { SelectMenu } from '@/components/SelectMenu';
 
 type HooksGeneration = Extract<Generation, { kind: 'hooks' }>;
 
@@ -66,22 +67,16 @@ function HooksTool() {
           </Field>
           <div className="grid-2">
             <Field label="Tone" optional error={fields.tone}>
-              {(p) => <input {...p} className="input" value={form.tone} onChange={(e) => set('tone')(e.target.value)} maxLength={60} placeholder="Blunt, friendly" />}
+              {(p) => <div id={p.id} className="choice-chips" role="group" aria-label="Tone">{['Blunt', 'Friendly', 'Bold'].map((tone) => <button type="button" key={tone} className="chip" aria-pressed={form.tone === tone} onClick={() => set('tone')(form.tone === tone ? '' : tone)}>{tone}</button>)}</div>}
             </Field>
             <Field label="How many">
-              {(p) => (
-                <select {...p} className="select" value={form.count} onChange={(e) => set('count')(e.target.value)}>
-                  {[5, 10, 15, 20].map((n) => (
-                    <option key={n}>{n}</option>
-                  ))}
-                </select>
-              )}
+              {(p) => <div id={p.id}><SelectMenu label="How many hooks" value={form.count} onChange={set('count')} options={[5, 10, 15, 20].map((n) => ({ value: String(n), label: `${n} hooks` }))} /></div>}
             </Field>
           </div>
           <PlatformSelect value={form.platform} onChange={set('platform')} />
           <ReferenceTranscript summary="Model the hooks on a video" value={form.referenceTranscript} onChange={set('referenceTranscript')} error={fields.referenceTranscript} />
           <ErrorNotice error={error} />
-          <button className="btn btn-primary" disabled={busy || form.topic.trim().length < 3}>
+          <button className="btn btn-primary btn-glow btn-block" data-loading={busy} disabled={busy || form.topic.trim().length < 3}>
             {busy ? 'Generating hooks' : 'Generate hooks'}
           </button>
         </form>
@@ -99,9 +94,9 @@ function HooksTool() {
               <HooksList hooks={result.output.hooks} topic={result.input.topic} />
             </div>
           ) : (
-            <div className="empty">
-              <h2>Your hooks will appear here</h2>
-              <p className="muted">Describe the video on the left. Each hook comes with its pattern and the reason it holds attention.</p>
+            <div className="ghost-hooks" aria-label="Preview of generated hook cards">
+              {[0, 1, 2].map((index) => <div key={index} className="ghost-hook"><span /><span /><small /></div>)}
+              <p className="muted">Your hooks will appear here, each with its pattern and why it holds attention.</p>
             </div>
           )}
         </section>

@@ -80,7 +80,14 @@ export class FakeApify {
       }
 
       if (actor === DEFAULT_ACTORS.instagram.replace('/', '~') && Array.isArray(input.username)) {
-        const reels = this.accounts.get(String(input.username[0])) ?? [];
+        const target = String(input.username[0]);
+        const post = this.posts.get(target);
+        if (post) {
+          const item = instagramItem(post, target);
+          if (input.includeTranscript === true) item.transcript = this.transcripts.has(target) ? this.transcripts.get(target) : this.defaultTranscript;
+          return send(201, [item]);
+        }
+        const reels = this.accounts.get(target) ?? [];
         return send(201, reels.map((p) => instagramItem(p, `https://www.instagram.com/reel/${p.id}/`)));
       }
 
@@ -113,7 +120,7 @@ function tiktokItem(p: FakePost, url: string) {
 }
 
 /** Shaped like the Instagram reel Actor's dataset items. */
-function instagramItem(p: FakePost, url: string) {
+function instagramItem(p: FakePost, url: string): Record<string, unknown> {
   return {
     id: p.id,
     shortCode: p.id,

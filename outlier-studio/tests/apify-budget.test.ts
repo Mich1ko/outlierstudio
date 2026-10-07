@@ -20,7 +20,7 @@ afterAll(() => apify.stop());
 
 const add = (cookie: string, url: string) => call(addChannelRoute, 'POST', '/api/channels', { cookie, body: { url } });
 
-/** Two reels per account, so a check of one account settles at 2 x $0.0015. */
+/** Two reels per account: one Actor start plus two free-tier reel events. */
 function seedAccount(username: string) {
   const now = Date.now();
   apify.accounts.set(username, [
@@ -41,7 +41,7 @@ describe('Apify monthly budget', () => {
     process.env.APIFY_MONTHLY_BUDGET_USD = '0.04';
     seedAccount('trailnotes');
     const { cookie } = await newUser();
-    // Thirty reels reserve $0.045, which is over this $0.04 budget.
+    // Thirty reels reserve $0.079, which is over this $0.04 budget.
     const res = await add(cookie, 'instagram.com/trailnotes');
     expect(res.status).toBe(402);
     expect((await res.json()).error.code).toBe('apify_budget');
@@ -50,15 +50,15 @@ describe('Apify monthly budget', () => {
   });
 
   it('stops at the budget: runs that fit go through, the next one is refused', async () => {
-    process.env.APIFY_MONTHLY_BUDGET_USD = '0.05';
+    process.env.APIFY_MONTHLY_BUDGET_USD = '0.09';
     seedAccount('alpha');
     seedAccount('bravo');
     seedAccount('charlie');
     const { cookie } = await newUser();
     expect((await add(cookie, 'instagram.com/alpha')).status).toBe(201);
     expect((await add(cookie, 'instagram.com/bravo')).status).toBe(201);
-    // Two settled checks cost 2 x 0.003 = 0.006, so a third reservation of 0.045 no longer fits.
-    expect(await apifySpendThisMonth()).toBeCloseTo(0.006, 6);
+    // Two settled checks cost 2 x $0.0062, so a third reservation of $0.079 no longer fits.
+    expect(await apifySpendThisMonth()).toBeCloseTo(0.0124, 6);
     const third = await add(cookie, 'instagram.com/charlie');
     expect(third.status).toBe(402);
     expect((await third.json()).error.code).toBe('apify_budget');
@@ -69,7 +69,7 @@ describe('Apify monthly budget', () => {
     seedAccount('trailnotes');
     const { cookie } = await newUser();
     await add(cookie, 'instagram.com/trailnotes');
-    expect(apify.calls.at(-1)!.cap).toBe('0.045000');
+    expect(apify.calls.at(-1)!.cap).toBe('0.079000');
   });
 
   it('counts a failed run at its reservation, so the budget errs low', async () => {
@@ -77,11 +77,11 @@ describe('Apify monthly budget', () => {
     const { cookie } = await newUser();
     apify.failNext = { status: 500, message: 'boom' };
     expect((await add(cookie, 'instagram.com/trailnotes')).status).toBe(503);
-    expect(await apifySpendThisMonth()).toBeCloseTo(0.045, 6);
+    expect(await apifySpendThisMonth()).toBeCloseTo(0.079, 6);
   });
 
   it('halts scheduled checks for a platform that has used up its budget, and reports the spend', async () => {
-    process.env.APIFY_MONTHLY_BUDGET_USD = '0.05';
+    process.env.APIFY_MONTHLY_BUDGET_USD = '0.09';
     seedAccount('alpha');
     const { cookie } = await newUser();
     await add(cookie, 'instagram.com/alpha');
@@ -89,13 +89,13 @@ describe('Apify monthly budget', () => {
     const { channels } = await import('@/server/db/schema');
     const { sql } = await import('drizzle-orm');
     await db.update(channels).set({ lastCheckedAt: sql`now() - interval '30 hours'` });
-    // Budget left: $0.047 after the first check. A new check reserves $0.045, which fits.
+    // Budget left: $0.0838 after the first check. A new $0.079 reservation fits.
     expect((await refreshDue()).checked).toBe(1);
-    // Now $0.05 - $0.006 is left, so another check is refused and the scheduler stops.
+    // After two settled checks, another $0.079 reservation no longer fits.
     await db.update(channels).set({ lastCheckedAt: sql`now() - interval '30 hours'` });
     const result = await refreshDue();
     expect(result.stoppedEarly).toBe(true);
     const list = await (await (await import('@/app/api/channels/route')).GET(new Request('http://localhost:3000/api/channels', { headers: { cookie } }))).json();
-    expect(list.apifyBudget).toEqual({ spentUsd: expect.any(Number), budgetUsd: 0.05 });
+    expect(list.apifyBudget).toEqual({ spentUsd: expect.any(Number), budgetUsd: 0.09 });
   });
 });

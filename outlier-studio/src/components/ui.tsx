@@ -53,10 +53,12 @@ export function ErrorNotice({ error }: { error: ApiError | null }) {
     ai_not_configured: 'The server needs a valid Groq API key. Nothing was charged.',
     invalid_input: 'Check the highlighted fields.',
     transcripts_not_configured: 'Nothing was charged.',
-    transcript_unavailable: 'Nothing was charged.',
+    transcript_unavailable: 'Paste the transcript in the Transcript tab instead. Nothing was charged.',
     transcript_quota: 'Nothing was charged.',
     transcript_timeout: 'Nothing was charged.',
     video_data_quota: 'Videos already in your feed are unaffected.',
+    video_not_accessible: 'Paste the transcript in the Transcript tab if you can open the video yourself.',
+    scraper_configuration: 'The server connector needs updating before this link can be retried.',
   };
   return (
     <div className="notice notice-error" role="alert" ref={ref}>
@@ -73,6 +75,7 @@ export function CopyButton({ text, label = 'Copy', className = 'btn btn-sm' }: {
     <button
       type="button"
       className={className}
+      data-copy-state={state}
       onClick={async () => {
         try {
           await navigator.clipboard.writeText(text);
@@ -113,11 +116,21 @@ export function Skeleton({ lines = 3 }: { lines?: number }) {
   );
 }
 
-export function PageHead({ title, children }: { title: string; children?: ReactNode }) {
+const SECTION: Record<string, string> = {
+  Videos: 'Research', Discover: 'Research', 'Hook library': 'Research', Watchlist: 'Setup',
+  Hooks: 'Create', Scripts: 'Create', 'Analyze a link': 'Create', Library: 'Create',
+  Usage: 'Setup', Settings: 'Setup',
+};
+
+export function PageHead({ title, eyebrow, action, children }: { title: string; eyebrow?: string; action?: ReactNode; children?: ReactNode }) {
   return (
     <header className="page-head">
-      <h1>{title}</h1>
-      {children && <p className="muted">{children}</p>}
+      <div className="page-head-copy">
+        <span className="page-eyebrow">{eyebrow ?? SECTION[title] ?? 'Workspace'}</span>
+        <h1>{title}</h1>
+        {children && <p className="muted">{children}</p>}
+      </div>
+      {action && <div className="page-head-action">{action}</div>}
     </header>
   );
 }

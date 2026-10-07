@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import Link from 'next/link';
 import { useRef, useState, type ReactNode } from 'react';
@@ -7,6 +7,7 @@ import type { SessionUser } from '@/lib/types';
 import { Icon } from './icons';
 import { Sidebar } from './Sidebar';
 import { ThemeToggle } from './ThemeToggle';
+import { CommandPalette } from './CommandPalette';
 
 export function AppShell({ user, children }: { user: SessionUser; children: ReactNode }) {
   const drawer = useRef<HTMLDialogElement>(null);
@@ -30,6 +31,7 @@ export function AppShell({ user, children }: { user: SessionUser; children: Reac
         <button type="button" className="drawer-close icon-button" aria-label="Close navigation" onClick={close}><Icon.close /></button>
         <Sidebar user={user} onNavigate={close} />
       </dialog>
+      <div className="desktop-command"><CommandPalette /></div>
     </div>
   );
 }

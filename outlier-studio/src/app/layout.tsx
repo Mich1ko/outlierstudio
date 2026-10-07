@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
+import '@fontsource-variable/bricolage-grotesque/wdth.css';
 import './globals.css';
 import { APP } from '@/config/app';
 import { ThemeProvider } from '@/components/ThemeProvider';

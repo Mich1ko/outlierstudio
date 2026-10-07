@@ -9,22 +9,28 @@ import { Icon } from './icons';
 import { ThemeToggle } from './ThemeToggle';
 
 const NAV = [
-  { group: 'Research', items: [
-    { href: '/app/feed', label: 'Videos', icon: Icon.feed },
-    { href: '/app/discover', label: 'Discover', icon: Icon.search },
-    { href: '/app/hook-library', label: 'Hook library', icon: Icon.hooks },
-  ] },
-  { group: 'Create', items: [
-    { href: '/app/scripts', label: 'Scripts', icon: Icon.scripts },
-    { href: '/app/hooks', label: 'Hook writer', icon: Icon.hooks },
-    { href: '/app/analyze', label: 'Analyze a link', icon: Icon.analyze },
-    { href: '/app/library', label: 'Library', icon: Icon.library },
-  ] },
-  { group: 'Setup', items: [
-    { href: '/app/competitors', label: 'Channels', icon: Icon.competitors },
-    { href: '/app/usage', label: 'Usage', icon: Icon.usage },
-    { href: '/app/settings', label: 'Settings', icon: Icon.settings },
-  ] },
+  {
+    group: 'Research', items: [
+      { href: '/app/feed', label: 'Videos', icon: Icon.feed },
+      { href: '/app/discover', label: 'Discover', icon: Icon.search },
+      { href: '/app/hook-library', label: 'Hook library', icon: Icon.hooks },
+    ]
+  },
+  {
+    group: 'Create', items: [
+      { href: '/app/scripts', label: 'Scripts', icon: Icon.scripts },
+      { href: '/app/hooks', label: 'Hook writer', icon: Icon.hooks },
+      { href: '/app/analyze', label: 'Analyze a link', icon: Icon.analyze },
+      { href: '/app/library', label: 'Library', icon: Icon.library },
+    ]
+  },
+  {
+    group: 'Setup', items: [
+      { href: '/app/competitors', label: 'Channels', icon: Icon.competitors },
+      { href: '/app/usage', label: 'Usage', icon: Icon.usage },
+      { href: '/app/settings', label: 'Settings', icon: Icon.settings },
+    ]
+  },
 ] as const;
 
 export function Sidebar({ user, onNavigate }: { user: SessionUser; onNavigate?: () => void }) {
@@ -55,8 +61,7 @@ export function Sidebar({ user, onNavigate }: { user: SessionUser; onNavigate?: 
           <span className="profile-avatar" aria-hidden="true">{user.name.trim().slice(0, 1).toUpperCase()}</span>
           <div><strong>{user.name}</strong><span className="text-sidebar-muted">{user.email}</span></div>
         </div>
-        <ThemeToggle />
-        <button type="button" className="sidebar-signout" onClick={signOut}>Sign out <Icon.external /></button>
+        <div className="profile-actions"><ThemeToggle /><button type="button" className="sidebar-signout" onClick={signOut}>Sign out <Icon.external /></button></div>
       </div>
     </aside>
   );

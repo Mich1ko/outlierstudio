@@ -9,6 +9,7 @@ import { ScriptStage } from '@/components/ScriptStage';
 import { CopyButton, ErrorNotice, Field, PageHead, ReferenceTranscript, useReveal } from '@/components/ui';
 import { compact, type ApiError } from '@/lib/api';
 import { streamScript } from '@/lib/stream';
+import { SelectMenu } from '@/components/SelectMenu';
 import { FRAMEWORK_KEYS, FRAMEWORKS, type Framework } from '@/shared/catalog';
 
 const LENGTHS = [15, 30, 45, 60, 90, 120, 180];
@@ -117,26 +118,10 @@ function ScriptWriter() {
           </Field>
           <div className="grid-2">
             <Field label="Structure">
-              {(p) => (
-                <select {...p} className="select" value={form.framework} onChange={(e) => set('framework')(e.target.value)}>
-                  {FRAMEWORK_KEYS.map((key) => (
-                    <option key={key} value={key}>
-                      {FRAMEWORKS[key].label}
-                    </option>
-                  ))}
-                </select>
-              )}
+              {(p) => <div id={p.id}><SelectMenu label="Structure" value={form.framework} onChange={set('framework')} options={FRAMEWORK_KEYS.map((key) => ({ value: key, label: FRAMEWORKS[key].label }))} /></div>}
             </Field>
             <Field label="Length">
-              {(p) => (
-                <select {...p} className="select" value={form.lengthSeconds} onChange={(e) => set('lengthSeconds')(e.target.value)}>
-                  {LENGTHS.map((s) => (
-                    <option key={s} value={s}>
-                      {s} seconds
-                    </option>
-                  ))}
-                </select>
-              )}
+              {(p) => <div id={p.id}><SelectMenu label="Length" value={form.lengthSeconds} onChange={set('lengthSeconds')} options={LENGTHS.map((seconds) => ({ value: String(seconds), label: `${seconds} seconds` }))} /></div>}
             </Field>
           </div>
           <p className="muted small">{FRAMEWORKS[form.framework].guide}</p>

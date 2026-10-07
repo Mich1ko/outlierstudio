@@ -5,6 +5,7 @@ import { useState, type FormEvent } from 'react';
 import { api, type ApiError } from '@/lib/api';
 import { parseVideoLink } from '@/shared/video-url';
 import { ErrorNotice, Field } from './ui';
+import { PlatformLogo } from './PlatformLogo';
 
 /**
  * Paste one video link (YouTube, TikTok or Instagram). The video is added to
@@ -17,6 +18,7 @@ export function AddVideoForm({ analyze = false, label = 'Video link', button = '
   const [busy, setBusy] = useState(false);
   const [linkError, setLinkError] = useState<string | undefined>();
   const [error, setError] = useState<ApiError | null>(null);
+  const detected = parseVideoLink(url);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -38,7 +40,10 @@ export function AddVideoForm({ analyze = false, label = 'Video link', button = '
   }
 
   return (
-    <form className="stack" onSubmit={submit} noValidate>
+    <form className="stack link-analyzer" onSubmit={submit} noValidate>
+      <div className="platform-lights" aria-label="Supported platforms">
+        {(['youtube', 'tiktok', 'instagram'] as const).map((platform) => <span key={platform} data-active={detected.ok && detected.platform === platform}><PlatformLogo platform={platform} />{platform[0]!.toUpperCase() + platform.slice(1)}</span>)}
+      </div>
       <div className="add-row">
         <Field label={label} hint="A YouTube video or Short, a TikTok video, or an Instagram reel." error={linkError}>
           {(p) => (
@@ -50,7 +55,7 @@ export function AddVideoForm({ analyze = false, label = 'Video link', button = '
                 setUrl(e.target.value);
                 setLinkError(undefined);
               }}
-              placeholder="https://"
+              placeholder="Paste a YouTube, TikTok or Instagram link"
               maxLength={500}
               inputMode="url"
             />

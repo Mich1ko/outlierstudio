@@ -13,6 +13,7 @@ type AnalysisGeneration = Extract<Generation, { kind: 'analysis' }>;
 const wholeNumber = (s: string) => (s.trim() === '' ? undefined : Number(s.replace(/[,\s]/g, '')));
 
 export default function AnalyzePage() {
+  const [mode, setMode] = useState<'link' | 'transcript'>('link');
   const [form, setForm] = useState({ transcript: '', title: '', platform: '', sourceUrl: '', views: '', channelMedianViews: '' });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<ApiError | null>(null);
@@ -41,15 +42,10 @@ export default function AnalyzePage() {
   const fields = error?.fields ?? {};
   return (
     <>
-      <PageHead title="Analyze a link">Paste a link to a video that performed. The transcript is fetched for you and the video is broken down into its hook, structure and ideas for your own version.</PageHead>
-
-      <div className="panel" style={{ maxWidth: 760, marginBottom: 28 }}>
-        <AddVideoForm analyze label="Link to the video" button="Analyze this video" />
-        <p className="muted small" style={{ marginTop: 8 }}>The video is also saved to your Videos list.</p>
-      </div>
-
-      <h2 style={{ marginBottom: 12 }}>No link? Paste a transcript</h2>
-      <div className="tool">
+      <PageHead title="Analyze a link">Turn a strong video into a reusable hook, structure, and set of ideas.</PageHead>
+      <div className="analyze-mode" role="tablist" aria-label="Analysis source"><button type="button" role="tab" aria-selected={mode === 'link'} onClick={() => setMode('link')}>Link</button><button type="button" role="tab" aria-selected={mode === 'transcript'} onClick={() => setMode('transcript')}>Transcript</button></div>
+      <div className="analyze-stage">
+        {mode === 'link' ? <section className="analyze-hero panel" role="tabpanel"><div><span className="page-eyebrow">FASTEST PATH</span><h2>What made this video work?</h2><p className="muted">Paste the link. We’ll fetch the transcript, save the video, and reveal the structure.</p></div><AddVideoForm analyze label="Video link" button="Analyze video" /></section> : <div className="tool" role="tabpanel">
         <form className="panel stack" onSubmit={submit} noValidate>
           <Field label="Transcript" hint="The spoken words of the video, at least a few sentences." error={fields.transcript}>
             {(p) => <textarea {...p} className="textarea textarea-tall" value={form.transcript} onChange={(e) => set('transcript')(e.target.value)} required maxLength={20000} />}
@@ -97,6 +93,7 @@ export default function AnalyzePage() {
             </div>
           )}
         </section>
+      </div>}
       </div>
     </>
   );

@@ -2,10 +2,13 @@
 
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Suspense, useCallback, useEffect, useState, type ReactNode } from 'react';
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { AddVideoForm } from '@/components/AddVideoForm';
 import { Picture } from '@/components/Picture';
 import { ErrorNotice, Skeleton } from '@/components/ui';
+import { PageHead } from '@/components/ui';
+import { SelectMenu } from '@/components/SelectMenu';
+import { PlatformLogo } from '@/components/PlatformLogo';
 import { api, type ApiError } from '@/lib/api';
 import { ago, compact } from '@/lib/format';
 import type { ChannelList, FeedVideo } from '@/lib/types';
@@ -82,12 +85,6 @@ const TrendIcon = () => (<svg {...svg}><path d="M2 11l4-4 3 3 5-6" /><path d="M1
 const EyeIcon = () => (<svg {...svg}><path d="M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z" /><circle cx="8" cy="8" r="2" /></svg>);
 const SparkIcon = () => (<svg {...svg}><path d="M8 1.5v3M8 11.5v3M1.5 8h3M11.5 8h3M3.5 3.5l2 2M10.5 10.5l2 2M12.5 3.5l-2 2M5.5 10.5l-2 2" /></svg>);
 
-const PLATFORM_GLYPH: Record<FeedVideo['platform'], ReactNode> = {
-  youtube: (<svg viewBox="0 0 16 16" aria-hidden><path d="M6 4.5v7l6-3.5z" fill="currentColor" /></svg>),
-  instagram: (<svg {...svg} strokeWidth={1.6}><rect x="2.5" y="2.5" width="11" height="11" rx="3.2" /><circle cx="8" cy="8" r="2.6" /><circle cx="11.4" cy="4.6" r="0.4" fill="currentColor" /></svg>),
-  tiktok: (<svg viewBox="0 0 16 16" aria-hidden><path d="M9.5 2h2a3 3 0 0 0 2.5 2.5v2a5 5 0 0 1-2.5-.8V10a4 4 0 1 1-4-4v2.1A1.9 1.9 0 1 0 9.5 10z" fill="currentColor" /></svg>),
-};
-
 function VideoCard({ video }: { video: FeedVideo }) {
   const eng = engagementRate(video);
   const portrait = video.isShort || video.platform !== 'youtube';
@@ -96,25 +93,20 @@ function VideoCard({ video }: { video: FeedVideo }) {
       <span className="vcard-media">
         <Picture className="vthumb" src={video.thumbnailUrl} />
         <span className="vcard-badge" data-p={video.platform} title={PLATFORM_NAME[video.platform]}>
-          {PLATFORM_GLYPH[video.platform]}
+          <PlatformLogo platform={video.platform} />
         </span>
         {video.analyzed && <span className="vcard-done">Analyzed</span>}
+        {video.outlierMultiple !== null && <span className="vcard-outlier"><TrendIcon />{video.outlierMultiple}x</span>}
+        <span className="vcard-quick">Break down <span aria-hidden="true">→</span></span>
       </span>
       <span className="vcard-title" title={video.title}>{video.title}</span>
       <span className="vcard-meta">
         <span>{video.channelHandle ?? video.channelTitle}</span>
         <span>{ago(video.publishedAt)}</span>
       </span>
-      <span className="pills">
-        {video.outlierMultiple !== null && (
-          <span className="pill pill-green" title="Views compared with the channel's normal"><TrendIcon />{video.outlierMultiple}x</span>
-        )}
-        {video.viewCount !== null && (
-          <span className="pill pill-blue" title="Views"><EyeIcon />{compact(video.viewCount)}</span>
-        )}
-        {eng !== null && (
-          <span className="pill pill-orange" title="Likes and comments per view"><SparkIcon />{eng}%</span>
-        )}
+      <span className="vcard-stats">
+        {video.viewCount !== null && <span title="Views"><EyeIcon />{compact(video.viewCount)} views</span>}
+        {eng !== null && <span title="Likes and comments per view"><SparkIcon />{eng}% engagement</span>}
       </span>
     </Link>
   );
@@ -153,7 +145,11 @@ function Feed() {
   const [videos, setVideos] = useState<FeedVideo[] | null>(null);
   const [next, setNext] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<ApiError | null>(null);
+  const loadMoreRef = useRef<HTMLDivElement>(null);
+  const pagingRef = useRef(false);
+  const feedVersionRef = useRef(0);
 
   useEffect(() => {
     api<ChannelList>('/api/channels').then(setChannels).catch(() => undefined);
@@ -170,7 +166,11 @@ function Feed() {
 
   useEffect(() => {
     if (!ready) return;
+    const version = ++feedVersionRef.current;
+    pagingRef.current = true;
+    setLoadingMore(false);
     if (noStatus) {
+      pagingRef.current = false;
       setVideos([]);
       setNext(null);
       setLoading(false);
@@ -183,12 +183,16 @@ function Feed() {
     const timer = setTimeout(() => {
       fetchPage(0)
         .then((page) => {
-          if (!live) return;
+          if (!live || version !== feedVersionRef.current) return;
           setVideos(page.items);
           setNext(page.nextOffset);
         })
         .catch((err) => live && setError(err))
-        .finally(() => live && setLoading(false));
+        .finally(() => {
+          if (!live || version !== feedVersionRef.current) return;
+          pagingRef.current = false;
+          setLoading(false);
+        });
     }, 300);
     return () => {
       live = false;
@@ -210,124 +214,78 @@ function Feed() {
     }
   }
 
-  async function more() {
-    if (next === null) return;
-    setLoading(true);
+  const more = useCallback(async () => {
+    if (next === null || loading || pagingRef.current) return;
+    const version = feedVersionRef.current;
+    pagingRef.current = true;
+    setLoadingMore(true);
+    setError(null);
     try {
       const page = await fetchPage(next);
-      setVideos((v) => [...(v ?? []), ...page.items]);
+      if (version !== feedVersionRef.current) return;
+      setVideos((current) => {
+        const existing = new Set((current ?? []).map((video) => video.id));
+        return [...(current ?? []), ...page.items.filter((video) => !existing.has(video.id))];
+      });
       setNext(page.nextOffset);
     } catch (err) {
-      setError(err as ApiError);
+      if (version === feedVersionRef.current) setError(err as ApiError);
     } finally {
-      setLoading(false);
+      if (version === feedVersionRef.current) {
+        pagingRef.current = false;
+        setLoadingMore(false);
+      }
     }
-  }
+  }, [fetchPage, loading, next]);
+
+  useEffect(() => {
+    const target = loadMoreRef.current;
+    if (!target || next === null || !videos?.length || !('IntersectionObserver' in window)) return;
+
+    const observer = new IntersectionObserver((entries) => {
+      if (entries[0]?.isIntersecting) void more();
+    }, { rootMargin: '700px 0px', threshold: 0.01 });
+
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [more, next, videos?.length]);
 
   const noChannels = channels !== null && channels.items.length === 0;
 
+  const topOutlier = videos?.reduce<number | null>((best, video) => video.outlierMultiple === null ? best : Math.max(best ?? 0, video.outlierMultiple), null) ?? null;
   return (
-    <div className="feed">
-      <aside className="feed-filters" aria-label="Filters">
-        <div className="feed-filters-head">
-          <h2>Filters</h2>
-          <button type="button" className="link-btn" onClick={() => { setFilters(DEFAULTS); setSavedNote(''); }}>
-            Clear
-          </button>
-        </div>
-
-        <label className="filter">
-          <span>Channels</span>
-          <select className="select" value={filters.channel} onChange={(e) => set('channel', e.target.value)}>
-            <option value="">All channels</option>
-            {channels?.items.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.title}
-                {c.isOwn ? ' (yours)' : ''}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label className="filter">
-          <span>Keywords</span>
-          <input className="input" type="search" placeholder="Search captions and titles" value={filters.q} onChange={(e) => set('q', e.target.value)} maxLength={100} />
-        </label>
-
-        <Range label="Outlier score" min={filters.minOutlier} max={filters.maxOutlier} onMin={(v) => set('minOutlier', v)} onMax={(v) => set('maxOutlier', v)} minHint="1x" maxHint="100x" />
-        <Range label="Views" min={filters.minViews} max={filters.maxViews} onMin={(v) => set('minViews', v)} onMax={(v) => set('maxViews', v)} minHint="0" maxHint="10,000,000" />
-        <Range label="Engagement" min={filters.minEngagement} max={filters.maxEngagement} onMin={(v) => set('minEngagement', v)} onMax={(v) => set('maxEngagement', v)} minHint="0%" maxHint="100%" />
-
-        <div className="filter">
-          <span>Posted in last</span>
-          <div className="range" style={{ gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1.2fr)' }}>
-            <input className="input" inputMode="numeric" aria-label="Posted in last, amount" placeholder="Any" value={filters.within} onChange={(e) => set('within', e.target.value.replace(/\D/g, ''))} />
-            <select className="select" aria-label="Posted in last, unit" value={filters.unit} onChange={(e) => set('unit', e.target.value as Filters['unit'])}>
-              <option value="days">Days</option>
-              <option value="weeks">Weeks</option>
-              <option value="months">Months</option>
-            </select>
+    <div className="feed-page stack-lg">
+      <PageHead title="Videos" action={<details className="menu"><summary className="btn btn-primary">Add video</summary><div className="menu-items add-video-popover"><AddVideoForm /></div></details>}>
+        Track what is breaking out, then turn the strongest patterns into your next idea.
+      </PageHead>
+      <section className="feed-stats" aria-label="Video overview">
+        <div><strong>{videos?.length ?? '—'}</strong><span>Videos in view</span></div>
+        <div><strong>{channels?.items.length ?? '—'}</strong><span>Channels tracked</span></div>
+        <div><strong>{topOutlier === null ? '—' : `${topOutlier}x`}</strong><span>Top outlier this period</span></div>
+      </section>
+      <section className="filter-toolbar" aria-label="Video filters">
+        <SelectMenu label="Channel filter" value={filters.channel} onChange={(value) => set('channel', value)} options={[{ value: '', label: 'All channels' }, ...(channels?.items.map((channel) => ({ value: channel.id, label: `${channel.title}${channel.isOwn ? ' (yours)' : ''}` })) ?? [])]} />
+        <SelectMenu label="Platform filter" value={filters.platform} onChange={(value) => set('platform', value as Filters['platform'])} options={[{ value: '', label: 'All platforms' }, { value: 'youtube', label: 'YouTube', icon: 'youtube' }, { value: 'instagram', label: 'Instagram', icon: 'instagram' }, { value: 'tiktok', label: 'TikTok', icon: 'tiktok' }]} />
+        <SelectMenu label="Format filter" value={filters.type} onChange={(value) => set('type', value as Filters['type'])} options={[{ value: 'all', label: 'All formats' }, { value: 'shorts', label: 'Short-form' }, { value: 'long', label: 'Long-form' }]} />
+        <SelectMenu label="Sort videos" value={filters.sort} onChange={(value) => set('sort', value as Filters['sort'])} options={Object.entries(SORTS).map(([value, label]) => ({ value, label }))} />
+        <details className="more-filters">
+          <summary className="filter-pill">More filters</summary>
+          <div className="filter-drawer-panel">
+            <div className="filter-drawer-head"><strong>More filters</strong><button type="button" className="link-btn" onClick={() => { setFilters(DEFAULTS); setSavedNote(''); }}>Clear all</button></div>
+            <label className="filter"><span>Keywords</span><input className="input" type="search" placeholder="Search captions and titles" value={filters.q} onChange={(e) => set('q', e.target.value)} maxLength={100} /></label>
+            <div className="advanced-ranges">
+              <Range label="Outlier score" min={filters.minOutlier} max={filters.maxOutlier} onMin={(v) => set('minOutlier', v)} onMax={(v) => set('maxOutlier', v)} minHint="1x" maxHint="100x" />
+              <Range label="Views" min={filters.minViews} max={filters.maxViews} onMin={(v) => set('minViews', v)} onMax={(v) => set('maxViews', v)} minHint="0" maxHint="10M" />
+              <Range label="Engagement" min={filters.minEngagement} max={filters.maxEngagement} onMin={(v) => set('minEngagement', v)} onMax={(v) => set('maxEngagement', v)} minHint="0%" maxHint="100%" />
+            </div>
+            <div className="filter-row"><input className="input" inputMode="numeric" aria-label="Posted in last, amount" placeholder="Any period" value={filters.within} onChange={(e) => set('within', e.target.value.replace(/\D/g, ''))} /><SelectMenu label="Period unit" value={filters.unit} onChange={(value) => set('unit', value as Filters['unit'])} options={[{ value: 'days', label: 'Days' }, { value: 'weeks', label: 'Weeks' }, { value: 'months', label: 'Months' }]} /></div>
+            <div className="toggles"><label className="toggle"><input type="checkbox" checked={filters.analyzed} onChange={(e) => set('analyzed', e.target.checked)} />Analyzed</label><label className="toggle"><input type="checkbox" checked={filters.unanalyzed} onChange={(e) => set('unanalyzed', e.target.checked)} />Unanalyzed</label></div>
+            <button type="button" className="btn" onClick={save}>{savedNote || 'Save filter'}</button>
           </div>
-        </div>
+        </details>
+      </section>
 
-        <label className="filter">
-          <span>Platform</span>
-          <select className="select" value={filters.platform} onChange={(e) => set('platform', e.target.value as Filters['platform'])}>
-            <option value="">All platforms</option>
-            <option value="youtube">YouTube</option>
-            <option value="instagram">Instagram</option>
-            <option value="tiktok">TikTok</option>
-          </select>
-        </label>
-
-        <label className="filter">
-          <span>Format</span>
-          <select className="select" value={filters.type} onChange={(e) => set('type', e.target.value as Filters['type'])}>
-            <option value="all">Short and long</option>
-            <option value="shorts">Short-form only</option>
-            <option value="long">Long-form only</option>
-          </select>
-        </label>
-
-        <div className="filter">
-          <span>Status</span>
-          <div className="toggles">
-            <label className="toggle">
-              <input type="checkbox" checked={filters.analyzed} onChange={(e) => set('analyzed', e.target.checked)} />
-              Analyzed
-            </label>
-            <label className="toggle">
-              <input type="checkbox" checked={filters.unanalyzed} onChange={(e) => set('unanalyzed', e.target.checked)} />
-              Unanalyzed
-            </label>
-          </div>
-        </div>
-
-        <button type="button" className="btn btn-block" onClick={save}>
-          {savedNote || 'Save filter'}
-        </button>
-      </aside>
-
-      <section aria-label="Videos" aria-busy={loading}>
-        <div className="feed-bar">
-          <h1>Videos</h1>
-          <div className="row" style={{ gap: 8 }}>
-            <label className="row" style={{ gap: 6 }}>
-              <span className="muted small">Sort by</span>
-              <select className="select" value={filters.sort} onChange={(e) => set('sort', e.target.value as Filters['sort'])}>
-                {Object.entries(SORTS).map(([k, label]) => (
-                  <option key={k} value={k}>{label}</option>
-                ))}
-              </select>
-            </label>
-            <details className="menu">
-              <summary className="btn btn-sm btn-primary">Add video</summary>
-              <div className="menu-items" style={{ minWidth: 320, padding: 12 }}>
-                <AddVideoForm />
-              </div>
-            </details>
-          </div>
-        </div>
+      <section aria-label="Videos" aria-busy={loading || loadingMore}>
 
         <div className="stack">
           <ErrorNotice error={error} />
@@ -363,11 +321,17 @@ function Feed() {
               ))}
             </div>
           )}
-          {next !== null && videos && videos.length > 0 && (
-            <div>
-              <button type="button" className="btn" onClick={more} disabled={loading}>
-                {loading ? 'Loading' : 'Show more'}
-              </button>
+          {videos && videos.length > 0 && (
+            <div ref={loadMoreRef} className="feed-sentinel" aria-live="polite">
+              {loadingMore ? (
+                <><span className="feed-loader" aria-hidden="true" />Loading more videos...</>
+              ) : next !== null ? (
+                <button type="button" className="btn feed-more-fallback" onClick={() => void more()} disabled={loading}>
+                  Load more videos
+                </button>
+              ) : (
+                <span>You&apos;ve reached the end.</span>
+              )}
             </div>
           )}
         </div>

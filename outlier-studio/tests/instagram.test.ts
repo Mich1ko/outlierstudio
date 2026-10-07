@@ -2,6 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { sql } from 'drizzle-orm';
 import { GET as listChannelsRoute, POST as addChannelRoute } from '@/app/api/channels/route';
 import { GET as videosRoute, POST as addVideoRoute } from '@/app/api/videos/route';
+import { POST as analyzeRoute } from '@/app/api/ai/analyze/route';
 import { getDb } from '@/server/db/client';
 import { channels } from '@/server/db/schema';
 import { refreshDue } from '@/server/video/tracking';
@@ -9,7 +10,7 @@ import { parseChannelInput } from '@/shared/channel-url';
 import { call, newUser, useTestApp } from './support/app';
 import { APIFY_TOKEN, FakeApify } from './support/fake-apify';
 
-useTestApp();
+const groq = useTestApp();
 const apify = new FakeApify();
 
 beforeAll(async () => {
@@ -24,6 +25,7 @@ beforeEach(() => {
 afterAll(() => apify.stop());
 
 const add = (cookie: string, url: string) => call(addChannelRoute, 'POST', '/api/channels', { cookie, body: { url } });
+const oneClick = (cookie: string, videoId: string) => call(analyzeRoute, 'POST', '/api/ai/analyze', { cookie, body: { videoId } });
 const feed = async (cookie: string) => (await call(videosRoute, 'GET', '/api/videos?type=all&days=all', { cookie })).json();
 
 function seedAccount(username = 'trailnotes') {
@@ -69,6 +71,22 @@ describe('Instagram profile links', () => {
     expect((await add(cookie, 'instagram.com/trailnotes')).status).toBe(200);
     const after = (await (await call(listChannelsRoute, 'GET', '/api/channels', { cookie })).json()).items[0];
     expect(after.monitored).toBe(true);
+  });
+
+  it('accepts an Instagram /p/ video URL using the Actor current input schema', async () => {
+    const url = 'https://www.instagram.com/p/Dbh2LTOxiJm/';
+    const post = { platform: 'instagram' as const, id: 'Dbh2LTOxiJm', username: 'trailnotes', displayName: 'Trail Notes', title: 'Video uploaded from Instagram', views: 1200, likes: 80, comments: 4, duration: 31 };
+    apify.posts.set(url, post);
+    apify.transcripts.set(url, 'This is a complete spoken transcript from an Instagram video with enough words to analyze safely.');
+    const { cookie } = await newUser();
+    const added = await call(addVideoRoute, 'POST', '/api/videos', { cookie, body: { url } });
+    expect(added.status).toBe(201);
+    expect(apify.calls.at(-1)?.input).toMatchObject({ username: [url], resultsLimit: 1 });
+    expect(apify.calls.at(-1)?.cap).toBe('0.007300');
+    const { videoId } = await added.json();
+    groq.enqueue({ kind: 'json', content: JSON.stringify({ summary: 'Summary', hook: { text: 'This is a complete spoken transcript', pattern: 'Direct', whyItWorks: 'Clear' }, format: 'Explainer', structure: [], storytellingTactics: [], topics: [], takeaways: [], remixIdeas: [] }) });
+    expect((await oneClick(cookie, videoId)).status).toBe(201);
+    expect(apify.calls.at(-1)?.input).toMatchObject({ username: [url], includeTranscript: true });
   });
 
   it('says so when the account does not exist', async () => {
