@@ -135,6 +135,7 @@ describe('Groq failures are reported, not hidden', () => {
     ['decommissioned model', { status: 400, body: { error: { message: 'The model has been decommissioned', code: 'model_decommissioned' } } }, 503, 'ai_model_unavailable'],
     ['outage', { status: 503, body: { error: { message: 'Service unavailable' } } }, 503, 'ai_unavailable'],
     ['bad key', { status: 401, body: { error: { message: 'Invalid API Key', code: 'invalid_api_key' } } }, 503, 'ai_not_configured'],
+    ['restricted model', { status: 403, body: { error: { message: 'Model blocked by organization', code: 'model_permission_blocked_org' } } }, 503, 'ai_access_denied'],
   ] as const;
 
   for (const [name, behavior, status, code] of cases) {
@@ -149,7 +150,7 @@ describe('Groq failures are reported, not hidden', () => {
       expect(JSON.stringify(body)).not.toMatch(/Invalid API Key|gsk_|at .*\.ts/);
       if (name === 'rate limit') expect(res.headers.get('retry-after')).toBe('7');
       const [row] = await requestRows(user.id);
-      expect(row).toMatchObject({ status: 'failed', errorCode: code, inputTokens: null });
+      expect(row).toMatchObject({ status: 'failed', errorCode: code, inputTokens: null, creditsCharged: 0 });
       expect(groq.calls).toHaveLength(1);
     });
   }
@@ -165,6 +166,25 @@ describe('Groq failures are reported, not hidden', () => {
 
   it('says so when no Groq key is configured, without calling anything', async () => {
     delete process.env.GROQ_API_KEY;
+    const { cookie, user } = await newUser();
+    const res = await call(analyze, 'POST', '/api/ai/analyze', { cookie, body: analysisBody });
+    expect(res.status).toBe(503);
+    expect((await res.json()).error.code).toBe('ai_not_configured');
+    expect(groq.calls).toHaveLength(0);
+    expect(await requestRows(user.id)).toHaveLength(0);
+  });
+
+  it('trims copied whitespace from the server key before authenticating', async () => {
+    process.env.GROQ_API_KEY = '  gsk_test_key\n';
+    const { cookie } = await newUser();
+    groq.enqueue({ kind: 'json', content: HOOKS_JSON });
+    const res = await call(hooks, 'POST', '/api/ai/hooks', { cookie, body: { topic: 'Warm ups for runners' } });
+    expect(res.status).toBe(201);
+    expect(groq.calls[0]!.authorization).toBe('Bearer gsk_test_key');
+  });
+
+  it('treats a whitespace-only key as missing without sending a request or charging', async () => {
+    process.env.GROQ_API_KEY = '  \n';
     const { cookie, user } = await newUser();
     const res = await call(analyze, 'POST', '/api/ai/analyze', { cookie, body: analysisBody });
     expect(res.status).toBe(503);

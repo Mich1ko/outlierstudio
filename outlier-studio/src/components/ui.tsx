@@ -51,6 +51,7 @@ export function ErrorNotice({ error }: { error: ApiError | null }) {
     ai_rate_limited: error.retryAfterSeconds ? `Try again in about ${Math.ceil(error.retryAfterSeconds)} seconds.` : 'Try again in a moment.',
     ai_model_unavailable: 'Nothing was charged.',
     ai_not_configured: 'The server needs a valid Groq API key. Nothing was charged.',
+    ai_access_denied: 'An administrator needs to check the Groq project and organization permissions, including access to the configured model. Nothing was charged.',
     invalid_input: 'Check the highlighted fields.',
     transcripts_not_configured: 'Nothing was charged.',
     transcript_unavailable: 'Paste the transcript in the Transcript tab instead. Nothing was charged.',

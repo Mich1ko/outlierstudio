@@ -13,7 +13,7 @@ function sourceFiles(dir: string): string[] {
 }
 
 const files = [...sourceFiles(path.join(root, 'src')), ...sourceFiles(path.join(root, 'scripts'))];
-const rel = (f: string) => path.relative(root, f);
+const rel = (f: string) => path.relative(root, f).split(path.sep).join('/');
 const read = (f: string) => fs.readFileSync(f, 'utf8');
 
 describe('Groq is the only AI provider', () => {

@@ -21,7 +21,12 @@ export default function HookLibraryPage() {
       .catch(setError);
   }, []);
   const patterns = useMemo(() => [...new Set((items ?? []).map((item) => item.hook.pattern).filter(Boolean))].slice(0, 8), [items]);
-  const shown = useMemo(() => (items ?? []).filter((item) => (!pattern || item.hook.pattern === pattern) && (!query.trim() || `${item.hook.text} ${item.hook.whyItWorks} ${item.video?.title ?? item.title}`.toLowerCase().includes(query.trim().toLowerCase()))), [items, pattern, query]);
+  const shown = useMemo(() => {
+    const favoriteOrder = new Map([...favorites].reverse().map((id, index) => [id, index]));
+    return (items ?? [])
+      .filter((item) => (!pattern || item.hook.pattern === pattern) && (!query.trim() || `${item.hook.text} ${item.hook.whyItWorks} ${item.video?.title ?? item.title}`.toLowerCase().includes(query.trim().toLowerCase())))
+      .sort((a, b) => (favoriteOrder.get(a.generationId) ?? favorites.size) - (favoriteOrder.get(b.generationId) ?? favorites.size));
+  }, [items, pattern, query, favorites]);
 
   return (
     <div className="hook-library-page">
@@ -45,7 +50,25 @@ export default function HookLibraryPage() {
           <ol className="hook-masonry">
             {shown.map((item) => (
               <li key={item.generationId} className="hook-card panel">
-                <div className="hook-card-top"><span className="row">{item.video && <PlatformBadge platform={item.video.platform} iconOnly />}<span className="tag">{item.hook.pattern || 'Hook'}</span></span><button type="button" className="favorite-button" aria-label={`${favorites.has(item.generationId) ? 'Remove' : 'Add'} favorite`} aria-pressed={favorites.has(item.generationId)} onClick={() => setFavorites((current) => { const next = new Set(current); if (next.has(item.generationId)) next.delete(item.generationId); else next.add(item.generationId); return next; })}>♡</button></div>
+                <div className="hook-card-top">
+                  <span className="row">{item.video && <PlatformBadge platform={item.video.platform} iconOnly />}<span className="tag">{item.hook.pattern || 'Hook'}</span></span>
+                  <button
+                    type="button"
+                    className="favorite-button"
+                    aria-label={favorites.has(item.generationId) ? 'Remove favorite' : 'Add favorite'}
+                    aria-pressed={favorites.has(item.generationId)}
+                    onClick={() => setFavorites((current) => {
+                      const next = new Set(current);
+                      if (next.has(item.generationId)) next.delete(item.generationId);
+                      else next.add(item.generationId);
+                      return next;
+                    })}
+                  >
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill={favorites.has(item.generationId) ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8Z" />
+                    </svg>
+                  </button>
+                </div>
                 <blockquote className="hook-card-quote">“{item.hook.text}”</blockquote>
                 <div className="hook-meta">
                   <span className="muted small">{item.hook.whyItWorks}</span>

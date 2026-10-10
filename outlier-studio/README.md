@@ -63,6 +63,30 @@ npm run admin:promote -- you@example.com
 
 When Groq retires a model, change the variable and restart. No code changes.
 
+### Troubleshooting Groq configuration
+
+You do not need to copy the entire `.env` into your hosting settings. Set
+`GROQ_API_KEY` in the running server's environment; the model variables above
+are optional overrides with built-in defaults. Locally, Next.js also loads
+`.env*` from the `outlier-studio` directory. Existing process environment
+variables take precedence over those files.
+
+For a hosted app, check that the key is assigned to the environment serving
+the failing request (for example, production versus preview), then restart
+or redeploy after changing it. Enter the key value only, without surrounding
+quotes or a `GROQ_API_KEY=` prefix. Keep it server-only; never use a
+`NEXT_PUBLIC_` prefix for secrets.
+
+- Missing key: configure `GROQ_API_KEY` on the running server.
+- Authentication rejected (401): check that the deployed key is current and
+  belongs to the intended Groq project. Adding model variables cannot fix an
+  invalid key.
+- Access denied (403): check Groq organization and project permissions,
+  including whether the configured model is allowed. This does not necessarily
+  mean the key is invalid. See [Groq model permissions](https://console.groq.com/docs/model-permissions).
+
+The app refunds its reserved credits when either provider rejection occurs.
+
 ## Get a YouTube API key (free)
 
 Competitor tracking reads public channel and video data through Google's

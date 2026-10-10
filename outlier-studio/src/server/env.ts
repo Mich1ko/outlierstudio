@@ -6,7 +6,7 @@ const schema = z.object({
   APP_URL: z.string().url().default('http://localhost:3000'),
   DATABASE_URL: z.string().optional(),
   PGLITE_DIR: z.string().default('./.data/pglite'),
-  GROQ_API_KEY: z.string().optional(),
+  GROQ_API_KEY: z.string().trim().optional(),
   GROQ_MODEL_QUALITY: z.string().min(1).default('openai/gpt-oss-120b'),
   GROQ_MODEL_FAST: z.string().min(1).default('openai/gpt-oss-20b'),
   /** Speech-to-text for TikTok and Instagram audio. whisper-large-v3 is Groq's most accurate model. */

@@ -3442,15 +3442,17 @@ html:not([data-theme-ready]) *::after {
   }
 
   .hook-masonry {
-    columns: 3 290px;
-    column-gap: 16px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 290px), 1fr));
+    gap: 16px;
+    align-items: start;
   }
 
   .hook-card {
     display: inline-grid;
     gap: 16px;
     width: 100%;
-    margin: 0 0 16px;
+    margin: 0;
     break-inside: avoid;
   }
 
@@ -3474,8 +3476,8 @@ html:not([data-theme-ready]) *::after {
   }
 
   .favorite-button[aria-pressed='true'] {
-    background: color-mix(in srgb, var(--score) 18%, var(--surface));
-    color: var(--text);
+    background: color-mix(in srgb, #ef4444 14%, var(--surface));
+    color: #ef4444;
   }
 
   .hook-card-quote {
@@ -3905,7 +3907,7 @@ html:not([data-theme-ready]) *::after {
     }
 
     .hook-masonry {
-      columns: 1;
+      grid-template-columns: 1fr;
     }
 
     .video-header {

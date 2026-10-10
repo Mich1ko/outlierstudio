@@ -42,8 +42,11 @@ export function mapGroqError(err: unknown): AppError {
         'The configured AI model is no longer available. An administrator needs to update the model setting.',
       );
     }
-    if (status === 401 || status === 403) {
-      return new AppError(503, 'ai_not_configured', 'AI features are not set up correctly on this server.');
+    if (status === 401) {
+      return new AppError(503, 'ai_not_configured', 'Groq rejected the server’s API key.');
+    }
+    if (status === 403) {
+      return new AppError(503, 'ai_access_denied', 'Groq denied access to this AI request.');
     }
     if (status === 413) {
       return new AppError(413, 'ai_input_too_large', 'That input is too long for the AI model. Shorten it and try again.');
