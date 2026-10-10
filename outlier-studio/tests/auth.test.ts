@@ -29,7 +29,13 @@ describe('authentication', () => {
     const res = await call(signup, 'POST', '/api/auth/signup', { body: { ...creds, role: 'admin', plan: 'titan' } });
     const { user } = await res.json();
     expect(user.role).toBe('user');
-    expect(user.plan).toBe('starter');
+    // Plans are no longer exposed by the session API. Check the persisted
+    // defaults as well so this still tests that signup cannot elevate access.
+    expect(user).not.toHaveProperty('plan');
+    const db = await getDb();
+    const [stored] = await db.select().from(users).where(eq(users.id, user.id));
+    expect(stored!.role).toBe('user');
+    expect(stored!.plan).toBe('starter');
   });
 
   it('stores passwords and session tokens hashed', async () => {

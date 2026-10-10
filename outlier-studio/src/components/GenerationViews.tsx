@@ -134,8 +134,15 @@ const KIND_HINT: Record<Technique['kind'], string> = {
 
 /** The tactics, tricks and techniques, grouped by kind. Older analyses only have a plain list of tactics. */
 function TechniquesSection({ analysis }: { analysis: Analysis }) {
-  const techniques = analysis.techniques ?? [];
-  const storytellingTactics = analysis.storytellingTactics ?? [];
+  // Saved JSON can predate the current schema. Validate these optional lists
+  // before reading length/map/filter so one old output cannot crash the page.
+  const techniques = Array.isArray(analysis.techniques)
+    ? analysis.techniques.filter((t) => t && ['tactic', 'trick', 'technique'].includes(t.kind)
+      && typeof t.name === 'string' && typeof t.quote === 'string' && typeof t.effect === 'string')
+    : [];
+  const storytellingTactics = Array.isArray(analysis.storytellingTactics)
+    ? analysis.storytellingTactics.filter((t) => typeof t === 'string')
+    : [];
   if (techniques.length === 0) {
     if (storytellingTactics.length === 0) return null;
     return (
