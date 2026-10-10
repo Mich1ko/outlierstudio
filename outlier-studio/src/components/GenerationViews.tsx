@@ -135,13 +135,14 @@ const KIND_HINT: Record<Technique['kind'], string> = {
 /** The tactics, tricks and techniques, grouped by kind. Older analyses only have a plain list of tactics. */
 function TechniquesSection({ analysis }: { analysis: Analysis }) {
   const techniques = analysis.techniques ?? [];
+  const storytellingTactics = analysis.storytellingTactics ?? [];
   if (techniques.length === 0) {
-    if (!analysis.storytellingTactics?.length) return null;
+    if (storytellingTactics.length === 0) return null;
     return (
       <section>
         <h2>Storytelling tactics</h2>
         <ul className="bullets">
-          {analysis.storytellingTactics.map((t, i) => (
+          {storytellingTactics.map((t, i) => (
             <li key={i}>{t}</li>
           ))}
         </ul>
